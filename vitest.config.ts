@@ -7,7 +7,5 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.test.ts"],
-    // No tests exist yet during scaffolding; remove once tests are added.
-    passWithNoTests: true,
   },
 });
