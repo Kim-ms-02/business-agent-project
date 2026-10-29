@@ -105,6 +105,16 @@ describe("normalizeReview: summary length", () => {
     );
   });
 
+  it("never cuts the summary in the middle of a quotation", () => {
+    const raw = {
+      ...fullRaw(),
+      summary: '강점이에요. 결과에 숫자가 없어요. 마지막도 "이상입니다. 감사합니다."로 끝나요. 잘하고 있어요. 다섯째예요.',
+    };
+    expect(normalizeReview(raw)!.summary).toBe(
+      '강점이에요. 결과에 숫자가 없어요. 마지막도 "이상입니다. 감사합니다."로 끝나요. 잘하고 있어요.',
+    );
+  });
+
   it("counts sentences on separate lines and joins them with spaces", () => {
     const raw = { ...fullRaw(), summary: "하나예요.\n둘이에요.\n셋이에요.\n넷이에요.\n다섯이에요." };
     expect(normalizeReview(raw)!.summary).toBe("하나예요. 둘이에요. 셋이에요. 넷이에요.");
@@ -262,6 +272,14 @@ describe("splitSentences", () => {
 
   it("does not split inside numbers", () => {
     expect(splitSentences("2.5초 동안 멈췄어요. 다시 해요.")).toEqual(["2.5초 동안 멈췄어요.", "다시 해요."]);
+  });
+
+  it("does not split inside quotation marks", () => {
+    expect(splitSentences('마지막도 "이상입니다. 감사합니다."로 끝나요. 다음 문장이에요.')).toEqual([
+      '마지막도 "이상입니다. 감사합니다."로 끝나요.',
+      "다음 문장이에요.",
+    ]);
+    expect(splitSentences("“많이 줄었다.”만 있어요. 숫자를 넣어요.")).toEqual(["“많이 줄었다.”만 있어요.", "숫자를 넣어요."]);
   });
 
   it("returns nothing for empty text", () => {
