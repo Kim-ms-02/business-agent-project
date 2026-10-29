@@ -6,6 +6,8 @@ import {
   checkQuotes,
   chooseReview,
   countSyllables,
+  evaluationLabel,
+  feedbackLines,
   estimateSeconds,
   findShortages,
   firstSecondsText,
@@ -354,6 +356,33 @@ describe("answerEvaluations", () => {
 
   it("says how many results are missing", () => {
     expect(missingAnswerMessage(2)).toBe("답변 평가를 2개 받지 못했어요");
+  });
+});
+
+describe("final screen labels", () => {
+  const feedback = (verdict: "좋음" | "보완 필요" | "부족") => ({
+    verdict,
+    wentWell: "숫자를 댔어요.",
+    missing: "출처가 빠졌어요.",
+    tryThis: "출처를 함께 말해 보세요.",
+  });
+
+  it("shows the verdict, or why there is none", () => {
+    expect(evaluationLabel({ status: "evaluated", feedback: feedback("보완 필요") })).toBe("보완 필요");
+    expect(evaluationLabel({ status: "skipped" })).toBe("답하지 않음");
+    expect(evaluationLabel({ status: "missing" })).toBe("평가를 받지 못했어요");
+  });
+
+  it("lists the three feedback sentences in order with their labels", () => {
+    expect(feedbackLines(feedback("부족"))).toEqual([
+      { label: "좋았던 점", text: "숫자를 댔어요." },
+      { label: "빠진 점", text: "출처가 빠졌어요." },
+      { label: "이렇게 말해 보기", text: "출처를 함께 말해 보세요." },
+    ]);
+  });
+
+  it("calls the second sentence a way to do better when the answer was good", () => {
+    expect(feedbackLines(feedback("좋음"))[1].label).toBe("더 좋게 할 점");
   });
 });
 
