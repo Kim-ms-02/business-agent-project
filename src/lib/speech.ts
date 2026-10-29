@@ -1,7 +1,8 @@
 import { splitSentences } from "./validate";
 
 // Browser-only: reads questions aloud and turns spoken answers into text.
-// Dictation runs on the device only (processLocally), so the user's voice never leaves the browser.
+// Dictation uses the browser's built-in recognition, which sends the voice to Google's server.
+// The screen says so next to the button, and this app never stores the recording.
 
 const LANG = "ko-KR";
 
@@ -25,21 +26,14 @@ export function pickVoice<T extends VoiceLike>(voices: T[]): T | null {
   return korean.find((v) => v.localService) ?? korean[0] ?? null;
 }
 
-export type DictationStatus = "available" | "downloadable" | "downloading" | "unavailable" | "unsupported";
+export const DICTATION_NOTICE =
+  "말로 답하면 받아쓰기를 위해 목소리가 구글 서버로 전송돼요. 이 앱은 녹음을 저장하지 않아요.";
 
-export function availabilityMessage(status: DictationStatus): string | null {
-  switch (status) {
-    case "available":
-      return null;
-    case "downloadable":
-      return "말로 답하려면 한국어 받아쓰기 파일을 한 번 내려받아야 해요.";
-    case "downloading":
-      return "한국어 받아쓰기 파일을 내려받는 중이에요.";
-    case "unavailable":
-      return "이 브라우저에서는 기기 안에서 받아쓰기를 할 수 없어요. 글로 입력해 주세요.";
-    case "unsupported":
-      return "이 브라우저는 기기 안 받아쓰기를 지원하지 않아요. 크롬 최신 버전을 쓰거나 글로 입력해 주세요.";
-  }
+export const NO_DICTATION_MESSAGE = "이 브라우저는 받아쓰기를 지원하지 않아요. 크롬이나 엣지를 쓰거나 글로 입력해 주세요.";
+
+/** The standard constructor if present, otherwise the prefixed one Chrome and Edge ship. */
+export function pickRecognition<T>(source: { SpeechRecognition?: T; webkitSpeechRecognition?: T }): T | null {
+  return source.SpeechRecognition ?? source.webkitSpeechRecognition ?? null;
 }
 
 export function recognitionErrorMessage(code: string): string | null {
@@ -53,6 +47,8 @@ export function recognitionErrorMessage(code: string): string | null {
       return "마이크를 찾지 못했어요. 마이크 연결을 확인해 주세요.";
     case "no-speech":
       return "말소리가 들리지 않았어요. 다시 눌러서 말해 보세요.";
+    case "network":
+      return "받아쓰기는 인터넷이 필요해요. 인터넷 연결을 확인하거나 글로 입력해 주세요.";
     default:
       return "받아쓰기에 문제가 생겼어요. 글로 입력해 주세요.";
   }
@@ -84,7 +80,7 @@ export function speak(text: string, onEnd?: () => void): () => void {
   return () => synth.cancel();
 }
 
-// ---------- Dictation (on-device only) ----------
+// ---------- Dictation ----------
 
 interface RecognitionResultEvent {
   resultIndex: number;
@@ -95,7 +91,6 @@ interface Recognition {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
-  processLocally: boolean;
   onresult: ((event: RecognitionResultEvent) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
@@ -103,46 +98,20 @@ interface Recognition {
   stop(): void;
 }
 
-interface OnDeviceOptions {
-  langs: string[];
-  processLocally: boolean;
-}
+type RecognitionConstructor = new () => Recognition;
 
-interface RecognitionConstructor {
-  new (): Recognition;
-  available?(options: OnDeviceOptions): Promise<string>;
-  install?(options: OnDeviceOptions): Promise<boolean>;
-}
-
-// Only the unprefixed constructor: on-device support comes without a prefix, and the
-// prefixed webkitSpeechRecognition sends audio to a server.
 function recognitionConstructor(): RecognitionConstructor | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { SpeechRecognition?: RecognitionConstructor }).SpeechRecognition ?? null;
+  return pickRecognition(
+    window as unknown as {
+      SpeechRecognition?: RecognitionConstructor;
+      webkitSpeechRecognition?: RecognitionConstructor;
+    },
+  );
 }
 
-const ON_DEVICE: OnDeviceOptions = { langs: [LANG], processLocally: true };
-
-export async function checkDictation(): Promise<DictationStatus> {
-  const Ctor = recognitionConstructor();
-  if (!Ctor?.available) return "unsupported";
-  try {
-    const status = await Ctor.available(ON_DEVICE);
-    return ["available", "downloadable", "downloading"].includes(status) ? (status as DictationStatus) : "unavailable";
-  } catch {
-    return "unavailable";
-  }
-}
-
-/** Downloads the Korean language pack once. Resolves true when it is installed. */
-export async function installDictation(): Promise<boolean> {
-  const Ctor = recognitionConstructor();
-  if (!Ctor?.install) return false;
-  try {
-    return await Ctor.install(ON_DEVICE);
-  } catch {
-    return false;
-  }
+export function canDictate(): boolean {
+  return recognitionConstructor() !== null;
 }
 
 interface ListenHandlers {
@@ -152,17 +121,16 @@ interface ListenHandlers {
   onEnd: () => void;
 }
 
-/** Starts on-device dictation. Returns a function that stops listening. */
+/** Starts dictation. Returns a function that stops listening. */
 export function startListening(handlers: ListenHandlers): () => void {
   const Ctor = recognitionConstructor();
   if (!Ctor) {
-    handlers.onError(availabilityMessage("unsupported") ?? "");
+    handlers.onError(NO_DICTATION_MESSAGE);
     handlers.onEnd();
     return () => {};
   }
   const recognition = new Ctor();
   recognition.lang = LANG;
-  recognition.processLocally = true;
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.onresult = (event) => {
