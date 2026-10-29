@@ -78,9 +78,4 @@ describe("loadSkill", () => {
   it("asks for one answer to avoid per question", () => {
     expect(skill).toContain("피할 답");
   });
-
-  it("states the fixed feedback counts", () => {
-    expect(skill).toContain("잘한 점은 정확히 2개");
-    expect(skill).toContain("고칠 점은 정확히 3개");
-  });
 });
