@@ -39,6 +39,7 @@ describe("scoreDelivery: typical rehearsals", () => {
     expect(result.items.volume.score).toBe(4);
     expect(result.items.time.score).toBe(4);
     expect(result.total).toBe(100);
+    expect(result.totalNote).toBeNull();
     expect(result.silences).toEqual([]);
   });
 
@@ -71,6 +72,14 @@ describe("scoreDelivery: typical rehearsals", () => {
     expect(result.items.time.value).toBeCloseTo(80 / 60);
     expect(result.items.time.score).toBe(1);
   });
+
+  it("times the talk from the first word to the last, leaving out quiet time after start and before stop", () => {
+    // 10 quiet seconds after "start", 50 seconds of talk, 20 quiet seconds before "stop".
+    const result = measured(scoreDelivery(input({ record: record([[10, 60]], 80), scriptSyllables: 250, limitSeconds: 50 })));
+    expect(result.speakingSpanSeconds).toBeCloseTo(50);
+    expect(result.items.time.value).toBeCloseTo(1);
+    expect(result.items.time.score).toBe(4);
+  });
 });
 
 describe("scoreDelivery: not enough to measure", () => {
@@ -100,6 +109,11 @@ describe("scoreDelivery: script not read to the end", () => {
     expect(result.items.volume.score).toBe(4);
     expect(result.items.time.score).toBe(4);
     expect(result.total).toBe(Math.round((10 / 12) * 100));
+  });
+
+  it("marks the total as based on three items", () => {
+    const result = measured(scoreDelivery(input({ record: record(spans, 60), scriptSyllables: 250, readToEnd: false })));
+    expect(result.totalNote).toBe("3항목 기준");
   });
 });
 
