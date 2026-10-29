@@ -91,8 +91,11 @@
 - 패키지: `@mediapipe/tasks-vision` (package.json에 정확한 버전으로 고정). 공식 가이드: https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js
 - 공식 예제(google-ai-edge/mediapipe-samples-web)는 읽고 참고만 한다. 코드를 복사하지 않는다.
 - 옵션: `runningMode: "VIDEO"`, `numFaces: 1`, `outputFaceBlendshapes: true`, `outputFacialTransformationMatrixes: true`. GPU 사용을 먼저 시도하고 안 되면 CPU로 바꾼다.
-- 모델 파일(face_landmarker.task)과 wasm 파일을 어디서 불러올지(인터넷 주소 또는 public/ 폴더)는 기술 결정이므로 추천대로 정하고 알려준다. 모델 파일을 public/에 둘 경우 크기를 확인하고 커밋해도 되는지 먼저 묻는다.
+- 모델 파일(face_landmarker.task, 약 3.8MB)은 개발 서버를 켜거나 빌드할 때 public/ 아래 폴더에 없을 때만 버전이 고정된 주소(`…/face_landmarker/float16/1/face_landmarker.task`)에서 내려받는다. 내려받은 파일의 SHA-256을 미리 적어 둔 값과 비교해 다르면 쓰지 않는다. 내려받기에 실패하면 빌드는 멈추고, 개발 서버는 경고만 하고 켜진다.
+- wasm 파일은 vad-web처럼 node_modules에서 자동 복사하고, 실제로 불러오는 것만 복사한다(SIMD용 vision_wasm_internal.js·.wasm).
+- 모델과 wasm을 둔 폴더는 .gitignore에 넣어 커밋하지 않고, 같은 폴더에 라이선스 문구를 함께 둔다: @mediapipe/tasks-vision(Apache-2.0, Google), face_landmarker.task(Apache-2.0, Google, 모델 설명서 기준). 화면은 이 폴더에서만 불러오므로 리허설 중 외부 요청이 없다.
 - 측정은 초당 약 10번만 한다(매 화면마다 돌리지 않는다). 카메라 화면은 발표자에게만 보여 주고 저장하지 않는다.
+- 카메라를 켜기 전에 "카메라 영상은 저장하지 않고 브라우저 밖으로 보내지 않아요" 안내를 보여 준다. 안내를 본 뒤 발표자가 직접 카메라를 켠다.
 
 ### 프레임 기록 (faceTracker → faceScore로 넘기는 값)
 매 측정마다 아래 값만 남긴다. 사진·얼굴 점 좌표 원본은 남기지 않는다.
@@ -114,6 +117,7 @@
 
 - 총점 = 네 항목 합 ÷ 16 × 100 (반올림). 화면에는 총점, 항목 점수, 이유(측정 숫자 한 줄), 시선이 낮았던 구간(10초 단위)을 보여 준다.
 - 이 기준선은 과학적으로 정해진 값이 아니라 설계 값이다. 화면에 그렇게 밝히고, prompt-log의 "README 알려진 한계로 옮길 것"에 적는다.
+- 리허설 결과의 얼굴 행동 점수 영역에 "연습용 참고 점수예요. 채점이나 평가에 쓰지 마세요."를 보여 준다. 모델 설명서의 사용 범위(사람에게 중요한 결정에 쓰지 않는다)에 맞추기 위해서다. prompt-log의 "README 알려진 한계로 옮길 것"에도 적는다.
 - 눈 깜빡임 횟수, 감정 이름(기쁨·긴장 등), 외모는 점수에 넣지 않는다.
 
 ### Claude에게 보내는 것
