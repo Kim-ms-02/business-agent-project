@@ -136,15 +136,84 @@
   cursor: not-allowed;
 }
 
-.answerList {
+.answerQuestion {
+  font-weight: 600;
+}
+
+.report {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
+}
+
+.report h2 {
+  font-size: 1.25rem;
+}
+
+.report h3 {
+  margin-top: 8px;
+  font-size: 1.0625rem;
+}
+
+.itemList {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   padding-left: 20px;
 }
 
-.answerQuestion {
+.itemList li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag {
+  color: var(--muted);
+  font-size: 0.875rem;
   font-weight: 600;
+}
+
+.quote {
+  padding: 6px 12px;
+  border-left: 3px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+/* Principle 2: a quote not found in the script is shown in yellow. */
+.quoteMissing {
+  border-left-color: var(--warning);
+  background: var(--warning-surface);
+}
+
+.quoteNote {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--warning-text);
+}
+
+.tryThis strong {
+  margin-right: 6px;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detailRow dt {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.detailRow dd {
+  overflow-wrap: anywhere;
+}
+
+.verdict {
+  font-weight: 700;
 }
 
 @media (max-width: 520px) {

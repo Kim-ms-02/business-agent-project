@@ -2,6 +2,9 @@ import { IMPROVEMENT_COUNT, MAX_SUMMARY_SENTENCES, QUESTION_COUNT, STRENGTH_COUN
 import {
   CRITERIA,
   QUESTION_TYPES,
+  VERDICTS,
+  type AnswerEvaluation,
+  type AnswerFeedback,
   type CheckedReview,
   type Criterion,
   type Improvement,
@@ -12,6 +15,7 @@ import {
   type Section,
   type Shortage,
   type Strength,
+  type Verdict,
 } from "./types";
 
 // Pure functions only: no network, no browser APIs.
@@ -61,6 +65,14 @@ function spoken(value: unknown): string | null {
   return cleaned(value, SPOKEN_NOISE);
 }
 
+// The screen labels the field "이렇게 말해 보기", so the same words at the start would show twice.
+const TRY_LEAD_IN = /^이렇게 말해 (?:보세요|보기)\s*[.:：,!—–-]?\s*/;
+
+function tryThisText(value: unknown): string | null {
+  const cleanedText = screen(value);
+  return cleanedText === null ? null : text(cleanedText.replace(TRY_LEAD_IN, ""));
+}
+
 function criterion(value: unknown): Criterion | null {
   const raw = text(value);
   return CRITERIA.find((c) => c === raw) ?? null;
@@ -86,7 +98,7 @@ function toImprovement(raw: Raw): Improvement | null {
   const c = criterion(raw.criterion);
   const quote = text(raw.quote);
   const problem = screen(raw.problem);
-  const tryThis = screen(raw.tryThis);
+  const tryThis = tryThisText(raw.tryThis);
   return c && quote && problem && tryThis ? { criterion: c, quote, problem, tryThis } : null;
 }
 
@@ -183,11 +195,17 @@ const MAX_SCRIPT_CHARS = 20000;
 const MIN_LIMIT_SECONDS = 10;
 const MAX_LIMIT_SECONDS = 3600;
 
-/** Shared by the form and the server, so the user always sees the app's own message. */
-export function inputError(script: string, limitSeconds: unknown): string | null {
+export function scriptError(script: string): string | null {
   const trimmed = script.trim();
   if (trimmed === "") return "대본을 입력해 주세요.";
   if (trimmed.length > MAX_SCRIPT_CHARS) return "대본이 너무 길어요. 2만 자 이하로 줄여 주세요.";
+  return null;
+}
+
+/** Shared by the form and the server, so the user always sees the app's own message. */
+export function inputError(script: string, limitSeconds: unknown): string | null {
+  const problem = scriptError(script);
+  if (problem !== null) return problem;
   if (
     typeof limitSeconds !== "number" ||
     !Number.isFinite(limitSeconds) ||
@@ -208,6 +226,59 @@ export function isAnswered(answer: string): boolean {
 
 export function answerLabel(answer: string): string {
   return isAnswered(answer) ? answer.trim() : "답하지 않음";
+}
+
+function verdict(value: unknown): Verdict | null {
+  const raw = text(value);
+  return VERDICTS.find((v) => v === raw) ?? null;
+}
+
+// Each feedback field holds one sentence, so the feedback is always three sentences.
+function oneSentence(cleanedText: string | null): string | null {
+  return cleanedText === null ? null : (splitSentences(cleanedText)[0] ?? null);
+}
+
+/** Cleans Claude's answer evaluations, keyed by question number (1-based). Null when unusable. */
+export function normalizeAnswerFeedback(raw: unknown): Map<number, AnswerFeedback> | null {
+  if (!isRecord(raw) || !Array.isArray(raw.evaluations)) return null;
+  const found = new Map<number, AnswerFeedback>();
+  for (const item of list(raw.evaluations)) {
+    const n = item.questionNumber;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || found.has(n)) continue;
+    const v = verdict(item.verdict);
+    const wentWell = oneSentence(screen(item.wentWell));
+    const missing = oneSentence(screen(item.missing));
+    const tryThis = oneSentence(tryThisText(item.tryThis));
+    if (v && wentWell && missing && tryThis) found.set(n, { verdict: v, wentWell, missing, tryThis });
+  }
+  return found;
+}
+
+/** One entry per question: skipped when not answered, missing when answered but not evaluated. */
+export function answerEvaluations(answers: string[], found: Map<number, AnswerFeedback>): AnswerEvaluation[] {
+  return answers.map((answer, i) => {
+    if (!isAnswered(answer)) return { status: "skipped" };
+    const feedback = found.get(i + 1);
+    return feedback ? { status: "evaluated", feedback } : { status: "missing" };
+  });
+}
+
+export function missingAnswerMessage(count: number): string {
+  return `답변 평가를 ${count}개 받지 못했어요`;
+}
+
+export function evaluationLabel(evaluation: AnswerEvaluation): string {
+  if (evaluation.status === "evaluated") return evaluation.feedback.verdict;
+  return evaluation.status === "skipped" ? answerLabel("") : "평가를 받지 못했어요";
+}
+
+/** The three feedback sentences in the order the skill file writes them, with screen labels. */
+export function feedbackLines(feedback: AnswerFeedback): { label: string; text: string }[] {
+  return [
+    { label: "좋았던 점", text: feedback.wentWell },
+    { label: feedback.verdict === "좋음" ? "더 좋게 할 점" : "빠진 점", text: feedback.missing },
+    { label: "이렇게 말해 보기", text: feedback.tryThis },
+  ];
 }
 
 // ---------- Quote check ----------
