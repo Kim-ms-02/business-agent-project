@@ -70,7 +70,7 @@ export const REVIEW_TOOL = {
       },
     },
   },
-} satisfies Anthropic.Beta.BetaTool;
+} satisfies Anthropic.Tool;
 
 // ---------- Input ----------
 
@@ -153,13 +153,11 @@ export function classifyError(error: unknown): CoachErrorKind {
 
 // ---------- Call ----------
 
-export type CreateMessage = (
-  params: Anthropic.Beta.MessageCreateParamsNonStreaming,
-) => Promise<Anthropic.Beta.BetaMessage>;
+export type CreateMessage = (params: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
 
 export function createMessageWithClient(): CreateMessage {
   const client = new Anthropic();
-  return (params) => client.beta.messages.create(params);
+  return (params) => client.messages.create(params);
 }
 
 export function coachModel(): string {
@@ -174,9 +172,6 @@ async function requestReview(input: ReviewInput, create: CreateMessage, model: s
   const response = await create({
     model,
     max_tokens: 16000,
-    // On a policy decline, the API retries on its default fallback model.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
     system: loadSkill(),
     tools: [REVIEW_TOOL],
     tool_choice: { type: "auto" },
