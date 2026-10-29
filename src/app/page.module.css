@@ -122,6 +122,31 @@
   font-weight: 600;
 }
 
+.answer {
+  min-height: 120px !important;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.answerList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-left: 20px;
+}
+
+.answerQuestion {
+  font-weight: 600;
+}
+
 @media (max-width: 520px) {
   .row {
     grid-template-columns: 1fr;

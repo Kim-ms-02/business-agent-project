@@ -2,7 +2,7 @@ export const CRITERIA = ["흐름", "근거", "분명한 말", "듣는 사람과 
 export type Criterion = (typeof CRITERIA)[number];
 
 // Order matters: questions are always asked in this order.
-export const QUESTION_TYPES = ["근거", "선택 이유", "한계"] as const;
+export const QUESTION_TYPES = ["근거", "다른 설명", "개념과 범위"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 export interface Strength {
@@ -23,6 +23,7 @@ export interface Question {
   quote: string;
   question: string;
   goodAnswer: string;
+  avoidAnswer: string;
 }
 
 export interface Review {

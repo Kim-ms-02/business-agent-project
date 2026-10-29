@@ -1,3 +1,4 @@
+import { IMPROVEMENT_COUNT, MAX_SUMMARY_SENTENCES, QUESTION_COUNT, STRENGTH_COUNT } from "./coachConfig";
 import {
   CRITERIA,
   QUESTION_TYPES,
@@ -16,9 +17,9 @@ import {
 // Pure functions only: no network, no browser APIs.
 
 export const REQUIRED_COUNTS: Record<Section, number> = {
-  strengths: 2,
-  improvements: 3,
-  questions: 3,
+  strengths: STRENGTH_COUNT,
+  improvements: IMPROVEMENT_COUNT,
+  questions: QUESTION_COUNT,
 };
 
 const SECTION_LABELS: Record<Section, string> = {
@@ -94,7 +95,10 @@ function toQuestion(raw: Raw): Question | null {
   const quote = text(raw.quote);
   const question = spoken(raw.question);
   const goodAnswer = screen(raw.goodAnswer);
-  return type && quote && question && goodAnswer ? { type, quote, question, goodAnswer } : null;
+  const avoidAnswer = screen(raw.avoidAnswer);
+  return type && quote && question && goodAnswer && avoidAnswer
+    ? { type, quote, question, goodAnswer, avoidAnswer }
+    : null;
 }
 
 function isPresent<T>(value: T | null): value is T {
@@ -107,9 +111,6 @@ function oneQuestionPerType(questions: Question[]): Question[] {
     (q): q is Question => q !== undefined,
   );
 }
-
-// The summary is strength, first fix, an optional notice, and encouragement.
-const MAX_SUMMARY_SENTENCES = 4;
 
 // Extra sentences are dropped from the middle so the closing encouragement survives.
 function limitSummary(value: string): string {
@@ -174,6 +175,39 @@ export function shouldAutoRetry(kind: ReviewErrorKind, retriesSoFar: number): bo
 /** What the practice screen may show. The evaluation stays hidden until the end. */
 export function practiceQuestions(review: CheckedReview): Pick<Question, "type" | "question">[] {
   return review.questions.map(({ type, question }) => ({ type, question }));
+}
+
+// ---------- Input ----------
+
+const MAX_SCRIPT_CHARS = 20000;
+const MIN_LIMIT_SECONDS = 10;
+const MAX_LIMIT_SECONDS = 3600;
+
+/** Shared by the form and the server, so the user always sees the app's own message. */
+export function inputError(script: string, limitSeconds: unknown): string | null {
+  const trimmed = script.trim();
+  if (trimmed === "") return "대본을 입력해 주세요.";
+  if (trimmed.length > MAX_SCRIPT_CHARS) return "대본이 너무 길어요. 2만 자 이하로 줄여 주세요.";
+  if (
+    typeof limitSeconds !== "number" ||
+    !Number.isFinite(limitSeconds) ||
+    limitSeconds < MIN_LIMIT_SECONDS ||
+    limitSeconds > MAX_LIMIT_SECONDS
+  ) {
+    return "제한 시간을 10초에서 60분 사이로 입력해 주세요.";
+  }
+  return null;
+}
+
+// ---------- Answers ----------
+
+// Skipping a question is allowed; a blank answer counts as skipped.
+export function isAnswered(answer: string): boolean {
+  return answer.trim() !== "";
+}
+
+export function answerLabel(answer: string): string {
+  return isAnswered(answer) ? answer.trim() : "답하지 않음";
 }
 
 // ---------- Quote check ----------
