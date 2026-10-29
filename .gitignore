@@ -8,6 +8,8 @@ node_modules/
 # 빌드 결과물
 # public/vad/는 npm run dev·build 때 node_modules에서 복사한다 (scripts/copy-vad-assets.mjs)
 /public/vad/
+# public/face/는 npm run dev·build 때 준비한다 (scripts/prepare-face-assets.mjs, 모델은 내려받음)
+/public/face/
 .next/
 out/
 build/
