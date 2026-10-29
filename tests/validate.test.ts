@@ -372,10 +372,10 @@ describe("normalizeAnswerFeedback", () => {
 
   it("keeps one sentence per field and removes markdown", () => {
     const found = normalizeAnswerFeedback({
-      evaluations: [item(1, { wentWell: "**숫자**를 댔어요. 출처도 좋아요.", tryThis: "이렇게 말해 보세요. 그리고 하나 더." })],
+      evaluations: [item(1, { wentWell: "**숫자**를 댔어요. 출처도 좋아요.", tryThis: "조사 시점을 말해 보세요. 그리고 하나 더." })],
     })!;
     expect(found.get(1)?.wentWell).toBe("숫자를 댔어요.");
-    expect(found.get(1)?.tryThis).toBe("이렇게 말해 보세요.");
+    expect(found.get(1)?.tryThis).toBe("조사 시점을 말해 보세요.");
   });
 });
 

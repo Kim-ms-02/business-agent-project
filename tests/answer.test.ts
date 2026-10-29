@@ -46,7 +46,7 @@ function evaluation(questionNumber: number, verdict = "보완 필요") {
     verdict,
     wentWell: `좋았던 점 ${questionNumber}.`,
     missing: `빠진 점 ${questionNumber}.`,
-    tryThis: `이렇게 말해 보기 ${questionNumber}.`,
+    tryThis: `따라 말할 문장 ${questionNumber}.`,
   };
 }
 
@@ -144,12 +144,12 @@ describe("evaluateAnswers", () => {
       evaluations: [
         {
           status: "evaluated",
-          feedback: { verdict: "좋음", wentWell: "좋았던 점 1.", missing: "빠진 점 1.", tryThis: "이렇게 말해 보기 1." },
+          feedback: { verdict: "좋음", wentWell: "좋았던 점 1.", missing: "빠진 점 1.", tryThis: "따라 말할 문장 1." },
         },
         { status: "skipped" },
         {
           status: "evaluated",
-          feedback: { verdict: "부족", wentWell: "좋았던 점 3.", missing: "빠진 점 3.", tryThis: "이렇게 말해 보기 3." },
+          feedback: { verdict: "부족", wentWell: "좋았던 점 3.", missing: "빠진 점 3.", tryThis: "따라 말할 문장 3." },
         },
       ],
       notices: [],
