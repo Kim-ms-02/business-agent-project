@@ -12,7 +12,6 @@ const LOOKING: Omit<FaceFrame, "t"> = {
   lookDown: 0.1,
   lookAway: 0.1,
   smile: 0,
-  browUp: 0,
   faceWidth: 0.3,
 };
 
@@ -61,6 +60,12 @@ describe("scoreFace: typical rehearsals", () => {
       { start: 10, end: 20 },
       { start: 20, end: 30 },
     ]);
+  });
+
+  it("does not count eyes looking to the side as looking at the screen, even with the head facing front", () => {
+    const result = measured(scoreFace(frames(30, () => ({ yaw: 0, pitch: 0, lookAway: 0.8 }))));
+    expect(result.items.gaze.value).toBe(0);
+    expect(result.items.gaze.score).toBe(0);
   });
 
   it("marks the 10-second stretches where gaze was low", () => {
@@ -151,6 +156,8 @@ describe("scoreFace: boundaries", () => {
     ["pitch", { pitch: 14.9 }, true],
     ["lookDown", { lookDown: 0.5 }, false],
     ["lookDown", { lookDown: 0.49 }, true],
+    ["lookAway", { lookAway: 0.5 }, false],
+    ["lookAway", { lookAway: 0.49 }, true],
   ])("counts a frame with %s %o as looking at the screen: %s", (_, frame, looking) => {
     const result = measured(scoreFace(frames(10, () => frame)));
     expect(result.items.gaze.value).toBe(looking ? 1 : 0);
