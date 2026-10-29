@@ -7,6 +7,7 @@ import {
   estimateSeconds,
   findShortages,
   firstSecondsText,
+  inputError,
   normalizeReview,
   shortageMessage,
 } from "./validate";
@@ -81,28 +82,15 @@ export interface ReviewInput {
   limitSeconds: number;
 }
 
-const MAX_SCRIPT_CHARS = 20000;
-const MIN_LIMIT_SECONDS = 10;
-const MAX_LIMIT_SECONDS = 3600;
-
 export function parseReviewInput(body: unknown): { ok: true; input: ReviewInput } | { ok: false; message: string } {
   if (typeof body !== "object" || body === null) return { ok: false, message: "요청 형식이 맞지 않아요." };
   const raw = body as Record<string, unknown>;
   const str = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
   const script = str(raw.script);
-  if (script === "") return { ok: false, message: "대본을 입력해 주세요." };
-  if (script.length > MAX_SCRIPT_CHARS) return { ok: false, message: "대본이 너무 길어요. 2만 자 이하로 줄여 주세요." };
-
-  const limitSeconds = raw.limitSeconds;
-  if (
-    typeof limitSeconds !== "number" ||
-    !Number.isFinite(limitSeconds) ||
-    limitSeconds < MIN_LIMIT_SECONDS ||
-    limitSeconds > MAX_LIMIT_SECONDS
-  ) {
-    return { ok: false, message: "제한 시간을 10초에서 60분 사이로 입력해 주세요." };
-  }
+  const error = inputError(script, raw.limitSeconds);
+  if (error !== null) return { ok: false, message: error };
+  const limitSeconds = raw.limitSeconds as number;
 
   return { ok: true, input: { script, topic: str(raw.topic), audience: str(raw.audience), limitSeconds } };
 }

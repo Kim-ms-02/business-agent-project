@@ -176,6 +176,28 @@ export function practiceQuestions(review: CheckedReview): Pick<Question, "type" 
   return review.questions.map(({ type, question }) => ({ type, question }));
 }
 
+// ---------- Input ----------
+
+const MAX_SCRIPT_CHARS = 20000;
+const MIN_LIMIT_SECONDS = 10;
+const MAX_LIMIT_SECONDS = 3600;
+
+/** Shared by the form and the server, so the user always sees the app's own message. */
+export function inputError(script: string, limitSeconds: unknown): string | null {
+  const trimmed = script.trim();
+  if (trimmed === "") return "대본을 입력해 주세요.";
+  if (trimmed.length > MAX_SCRIPT_CHARS) return "대본이 너무 길어요. 2만 자 이하로 줄여 주세요.";
+  if (
+    typeof limitSeconds !== "number" ||
+    !Number.isFinite(limitSeconds) ||
+    limitSeconds < MIN_LIMIT_SECONDS ||
+    limitSeconds > MAX_LIMIT_SECONDS
+  ) {
+    return "제한 시간을 10초에서 60분 사이로 입력해 주세요.";
+  }
+  return null;
+}
+
 // ---------- Answers ----------
 
 // Skipping a question is allowed; a blank answer counts as skipped.
