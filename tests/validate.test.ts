@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  answerEvaluations,
   answerLabel,
   checkQuotes,
   chooseReview,
@@ -10,6 +11,8 @@ import {
   firstSecondsText,
   inputError,
   isAnswered,
+  missingAnswerMessage,
+  normalizeAnswerFeedback,
   normalizeReview,
   practiceQuestions,
   quoteExists,
@@ -283,6 +286,74 @@ describe("answers", () => {
   it("labels a skipped answer for the screen", () => {
     expect(answerLabel("  저울로 쟀어요.  ")).toBe("저울로 쟀어요.");
     expect(answerLabel("")).toBe("답하지 않음");
+  });
+});
+
+describe("normalizeAnswerFeedback", () => {
+  const item = (questionNumber: unknown, extra: Record<string, unknown> = {}) => ({
+    questionNumber,
+    verdict: "보완 필요",
+    wentWell: "숫자를 댔어요.",
+    missing: "출처가 빠졌어요.",
+    tryThis: "조사 시점을 함께 말해 보세요.",
+    ...extra,
+  });
+
+  it("returns null when the response has no list of evaluations", () => {
+    expect(normalizeAnswerFeedback(null)).toBeNull();
+    expect(normalizeAnswerFeedback({ evaluations: "없음" })).toBeNull();
+  });
+
+  it("keys each result by its question number", () => {
+    const found = normalizeAnswerFeedback({ evaluations: [item(3), item(1)] })!;
+    expect([...found.keys()].sort()).toEqual([1, 3]);
+    expect(found.get(1)).toEqual({
+      verdict: "보완 필요",
+      wentWell: "숫자를 댔어요.",
+      missing: "출처가 빠졌어요.",
+      tryThis: "조사 시점을 함께 말해 보세요.",
+    });
+  });
+
+  it("drops results with an unknown verdict, a bad number, or an empty field", () => {
+    const found = normalizeAnswerFeedback({
+      evaluations: [item(1, { verdict: "훌륭함" }), item(0), item(1.5), item("2"), item(3, { missing: " " })],
+    })!;
+    expect(found.size).toBe(0);
+  });
+
+  it("keeps the first result when a question number repeats", () => {
+    const found = normalizeAnswerFeedback({ evaluations: [item(1), item(1, { verdict: "좋음" })] })!;
+    expect(found.get(1)?.verdict).toBe("보완 필요");
+  });
+
+  it("keeps one sentence per field and removes markdown", () => {
+    const found = normalizeAnswerFeedback({
+      evaluations: [item(1, { wentWell: "**숫자**를 댔어요. 출처도 좋아요.", tryThis: "이렇게 말해 보세요. 그리고 하나 더." })],
+    })!;
+    expect(found.get(1)?.wentWell).toBe("숫자를 댔어요.");
+    expect(found.get(1)?.tryThis).toBe("이렇게 말해 보세요.");
+  });
+});
+
+describe("answerEvaluations", () => {
+  const feedback = { verdict: "좋음" as const, wentWell: "a.", missing: "b.", tryThis: "c." };
+
+  it("marks skipped, evaluated, and missing questions in order", () => {
+    const found = new Map([[1, feedback]]);
+    expect(answerEvaluations(["답", "  ", "답"], found)).toEqual([
+      { status: "evaluated", feedback },
+      { status: "skipped" },
+      { status: "missing" },
+    ]);
+  });
+
+  it("ignores a result for a skipped question", () => {
+    expect(answerEvaluations([""], new Map([[1, feedback]]))).toEqual([{ status: "skipped" }]);
+  });
+
+  it("says how many results are missing", () => {
+    expect(missingAnswerMessage(2)).toBe("답변 평가를 2개 받지 못했어요");
   });
 });
 

@@ -75,6 +75,14 @@ describe("loadSkill", () => {
     expect(skill).toContain("좋은 질문: 조사 응답자가 원가 공개 영상을 본 사람들인가요?");
   });
 
+  it("explains what the answer evaluation receives and returns", () => {
+    const section = skill.slice(skill.indexOf("## 답변 평가"), skill.indexOf("## 결과 내는 방법"));
+    expect(section).toContain("피할 답");
+    expect(section).toContain("답하지 않은 질문은 오지 않는다");
+    expect(section).toContain("질문 번호");
+    expect(section).toContain("한 칸에 한 문장");
+  });
+
   it("asks for one answer to avoid per question", () => {
     expect(skill).toContain("피할 답");
   });
