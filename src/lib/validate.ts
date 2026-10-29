@@ -1,12 +1,17 @@
 import { IMPROVEMENT_COUNT, MAX_SUMMARY_SENTENCES, QUESTION_COUNT, STRENGTH_COUNT } from "./coachConfig";
+import { MAX_ITEM_SCORE } from "./deliveryConfig";
 import {
   CRITERIA,
+  DELIVERY_ITEMS,
   QUESTION_TYPES,
   VERDICTS,
   type AnswerEvaluation,
   type AnswerFeedback,
   type CheckedReview,
   type Criterion,
+  type DeliveryFeedback,
+  type DeliveryItem,
+  type DeliveryItemFeedback,
   type Improvement,
   type Question,
   type QuestionType,
@@ -279,6 +284,37 @@ export function feedbackLines(feedback: AnswerFeedback): { label: string; text: 
     { label: feedback.verdict === "좋음" ? "더 좋게 할 점" : "빠진 점", text: feedback.missing },
     { label: "이렇게 말해 보기", text: feedback.tryThis },
   ];
+}
+
+// ---------- Delivery feedback ----------
+
+/**
+ * Cleans Claude's delivery feedback. Only items that were scored are kept, in the screen's order.
+ * An item with full marks gets no thing to try; any other item needs one. Null when unusable.
+ */
+export function normalizeDeliveryFeedback(
+  raw: unknown,
+  scores: ReadonlyMap<DeliveryItem, number | null>,
+): DeliveryFeedback | null {
+  if (!isRecord(raw) || !Array.isArray(raw.items)) return null;
+  const summary = oneSentence(screen(raw.summary));
+  if (summary === null) return null;
+
+  const found = new Map<DeliveryItem, DeliveryItemFeedback>();
+  for (const entry of list(raw.items)) {
+    const item = DELIVERY_ITEMS.find((name) => name === text(entry.item));
+    const score = item ? scores.get(item) : undefined;
+    if (!item || score === undefined || score === null || found.has(item)) continue;
+    const explain = oneSentence(screen(entry.explain));
+    const tryThis = score === MAX_ITEM_SCORE ? null : oneSentence(tryThisText(entry.tryThis));
+    if (explain === null || (score !== MAX_ITEM_SCORE && tryThis === null)) continue;
+    found.set(item, { item, explain, tryThis });
+  }
+  return { summary, items: DELIVERY_ITEMS.flatMap((item) => found.get(item) ?? []) };
+}
+
+export function missingDeliveryMessage(count: number): string {
+  return `말투 피드백을 ${count}개 항목에서 받지 못했어요`;
 }
 
 // ---------- Quote check ----------

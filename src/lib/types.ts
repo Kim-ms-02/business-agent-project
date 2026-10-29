@@ -80,3 +80,32 @@ export type AnswerResult =
 export type ReviewResult =
   | { ok: true; review: CheckedReview; notices: string[]; estimatedSeconds: number }
   | { ok: false; kind: CoachErrorKind | "bad_input"; message: string };
+
+// Rehearsal delivery feedback
+
+// The four delivery items, in the order the result screen shows them.
+export const DELIVERY_ITEMS = ["말 속도", "침묵", "목소리 크기", "제한 시간"] as const;
+export type DeliveryItem = (typeof DELIVERY_ITEMS)[number];
+
+/** What the screen sends for coach feedback: scores, reason numbers, and silence times only. */
+export interface DeliverySummary {
+  total: number;
+  items: { item: DeliveryItem; score: number | null; reason: string }[];
+  silences: { start: number; end: number }[];
+}
+
+// tryThis is null for an item with full marks: it only gets a sentence about keeping it up.
+export interface DeliveryItemFeedback {
+  item: DeliveryItem;
+  explain: string;
+  tryThis: string | null;
+}
+
+export interface DeliveryFeedback {
+  summary: string;
+  items: DeliveryItemFeedback[];
+}
+
+export type DeliveryFeedbackResult =
+  | { ok: true; feedback: DeliveryFeedback; notices: string[] }
+  | { ok: false; kind: CoachErrorKind | "bad_input"; message: string };
