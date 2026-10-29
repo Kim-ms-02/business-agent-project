@@ -151,6 +151,38 @@ export function micErrorMessage(error: unknown): string {
   }
 }
 
+/** Who has the microphone on right now, so two parts of the screen do not use it at once. */
+export class MicUsage {
+  private current: string | null = null;
+  private readonly listeners = new Set<() => void>();
+
+  get owner(): string | null {
+    return this.current;
+  }
+
+  busyFor(who: string): boolean {
+    return this.current !== null && this.current !== who;
+  }
+
+  start(who: string): void {
+    this.current = who;
+    this.listeners.forEach((listener) => listener());
+  }
+
+  end(who: string): void {
+    if (this.current !== who) return;
+    this.current = null;
+    this.listeners.forEach((listener) => listener());
+  }
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+}
+
+export const micUsage = new MicUsage();
+
 // ---------- Browser ----------
 
 export interface LiveVoice {
@@ -170,7 +202,30 @@ function stopStream(stream: MediaStream): void {
   stream.getTracks().forEach((track) => track.stop());
 }
 
-export async function startVoiceTracker(onLive: (live: LiveVoice) => void): Promise<StartResult> {
+/** `owner` names who turned the microphone on (see micUsage); it counts as in use from here until stop. */
+export async function startVoiceTracker(owner: string, onLive: (live: LiveVoice) => void): Promise<StartResult> {
+  micUsage.start(owner);
+  const result = await openTracker(onLive);
+  if (!result.ok) {
+    micUsage.end(owner);
+    return result;
+  }
+  const { tracker } = result;
+  return {
+    ok: true,
+    tracker: {
+      async stop() {
+        try {
+          return await tracker.stop();
+        } finally {
+          micUsage.end(owner);
+        }
+      },
+    },
+  };
+}
+
+async function openTracker(onLive: (live: LiveVoice) => void): Promise<StartResult> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
     return { ok: false, message: NO_MIC_SUPPORT_MESSAGE };
   }

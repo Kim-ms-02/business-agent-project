@@ -58,6 +58,10 @@ export type DeliveryResult =
 export const NOT_ENOUGH_MESSAGE = "측정이 부족해요";
 export const SPEED_NEEDS_WHOLE_SCRIPT = "끝까지 읽어야 말 속도를 잴 수 있어요";
 export const THREE_ITEM_NOTE = "3항목 기준";
+export const DESIGN_VALUE_NOTICE =
+  "점수 기준선은 과학적으로 정해진 값이 아니라 이 앱이 정한 설계 값이에요. 참고로만 봐 주세요.";
+export const SPEED_LIMIT_NOTICE =
+  "말 속도는 대본을 그대로 읽었다고 보고 계산해요. 대본에서 벗어나 즉흥으로 말하면 말 속도가 틀릴 수 있어요.";
 
 // Sums of many small floats drift (0.8 can come out as 0.7999…), so values are rounded before
 // they are compared with the bands.
@@ -71,7 +75,7 @@ export function bandScore(value: number, bands: Band[]): number {
   return band?.score ?? LOWEST_SCORE;
 }
 
-function formatTime(seconds: number): string {
+export function formatTime(seconds: number): string {
   const whole = Math.round(seconds);
   return `${Math.floor(whole / 60)}분 ${whole % 60}초`;
 }
@@ -158,4 +162,32 @@ export function scoreDelivery(input: DeliveryInput): DeliveryResult {
     total,
     totalNote: scores.length < 4 ? THREE_ITEM_NOTE : null,
   };
+}
+
+// ---------- Result screen text ----------
+
+export interface DeliveryItemRow {
+  label: string;
+  score: string;
+  reason: string;
+}
+
+export function deliveryItems(result: Extract<DeliveryResult, { measured: true }>): DeliveryItemRow[] {
+  const { speed, silence, volume, time } = result.items;
+  const rows: [string, ItemScore][] = [
+    ["말 속도", speed],
+    ["침묵", silence],
+    ["목소리 크기", volume],
+    ["제한 시간", time],
+  ];
+  return rows.map(([label, item]) => ({
+    label,
+    score: item.score === null ? "점수 없음" : `${item.score} / ${MAX_ITEM_SCORE}`,
+    reason: item.reason,
+  }));
+}
+
+export function silenceLabel(silence: SpeechSegment): string {
+  const length = Math.round((silence.end - silence.start) * 10) / 10;
+  return `${formatTime(silence.start)}부터 ${length}초 동안`;
 }

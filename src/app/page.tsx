@@ -2,6 +2,17 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { QUESTION_COUNT } from "@/lib/coachConfig";
+import { MIN_SPOKEN_SECONDS, SILENCE_SECONDS } from "@/lib/deliveryConfig";
+import {
+  DESIGN_VALUE_NOTICE,
+  SPEED_LIMIT_NOTICE,
+  deliveryItems,
+  formatTime,
+  scoreDelivery,
+  silenceLabel,
+  type DeliveryResult,
+  type VoiceRecord,
+} from "@/lib/deliveryScore";
 import {
   appendTranscript,
   canDictate,
@@ -13,6 +24,7 @@ import {
 import type { AnswerEvaluation, AnswerResult, CheckedReview, Question, ReviewResult } from "@/lib/types";
 import {
   answerLabel,
+  countSyllables,
   evaluationLabel,
   feedbackLines,
   inputError,
@@ -20,11 +32,13 @@ import {
   practiceQuestions,
   shouldAutoRetry,
 } from "@/lib/validate";
+import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./page.module.css";
 import VoiceDebug from "./VoiceDebug";
 
 type Phase =
   | { name: "input"; error: string | null }
+  | { name: "rehearsal" }
   | { name: "preparing"; retrying: boolean }
   | { name: "failed"; message: string }
   | { name: "practice"; index: number }
@@ -117,6 +131,11 @@ export default function Home() {
     else void prepare();
   }
 
+  function startRehearsal() {
+    const error = inputError(script, limitSeconds);
+    setPhase(error !== null ? { name: "input", error } : { name: "rehearsal" });
+  }
+
   function backToInput() {
     setPrepared(null);
     setAnswers([]);
@@ -177,8 +196,15 @@ export default function Home() {
             <button className={styles.primary} type="submit">
               질문 받기
             </button>
+            <button className={styles.secondary} type="button" onClick={startRehearsal}>
+              리허설 하기
+            </button>
           </div>
         </form>
+      )}
+
+      {phase.name === "rehearsal" && (
+        <Rehearsal script={script} limitSeconds={limitSeconds} onRestart={backToInput} />
       )}
 
       {phase.name === "preparing" && (
@@ -504,6 +530,196 @@ function FinalReport({
 
       <p className={styles.muted}>이 평가는 연습을 돕는 참고 의견이에요. 맞는지는 직접 판단해 주세요.</p>
       <div className={styles.actions}>
+        <button className={styles.secondary} type="button" onClick={onRestart}>
+          처음으로
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const REHEARSAL_NOTICE = "리허설 소리는 받아쓰지 않고, 저장하지도 브라우저 밖으로 보내지도 않아요.";
+
+type RehearsalStep =
+  | { name: "ready"; error: string | null }
+  | { name: "starting" }
+  | { name: "running"; startedAt: number }
+  | { name: "stopping" }
+  | { name: "askReadToEnd"; record: VoiceRecord }
+  | { name: "result"; result: DeliveryResult };
+
+function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitSeconds: number; onRestart: () => void }) {
+  const [step, setStep] = useState<RehearsalStep>({ name: "ready", error: null });
+  const [speaking, setSpeaking] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const tracker = useRef<VoiceTracker | null>(null);
+
+  // Turn the microphone off if the speaker leaves in the middle of a rehearsal.
+  useEffect(() => () => void tracker.current?.stop(), []);
+
+  useEffect(() => {
+    if (step.name !== "running") return;
+    const timer = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(timer);
+  }, [step.name]);
+
+  async function start() {
+    setStep({ name: "starting" });
+    setSpeaking(false);
+    const result = await startVoiceTracker("rehearsal", (live) => setSpeaking(live.speaking));
+    if (!result.ok) {
+      setStep({ name: "ready", error: result.message });
+      return;
+    }
+    tracker.current = result.tracker;
+    setNow(Date.now());
+    setStep({ name: "running", startedAt: Date.now() });
+  }
+
+  async function stop() {
+    setStep({ name: "stopping" });
+    const record = await tracker.current?.stop();
+    tracker.current = null;
+    if (record) setStep({ name: "askReadToEnd", record });
+    else setStep({ name: "ready", error: null });
+  }
+
+  function answerReadToEnd(record: VoiceRecord, readToEnd: boolean) {
+    const result = scoreDelivery({ record, scriptSyllables: countSyllables(script), limitSeconds, readToEnd });
+    setStep({ name: "result", result });
+  }
+
+  if (step.name === "result") {
+    return (
+      <DeliveryReport
+        result={step.result}
+        onAgain={() => setStep({ name: "ready", error: null })}
+        onRestart={onRestart}
+      />
+    );
+  }
+
+  if (step.name === "askReadToEnd") {
+    return (
+      <section className={styles.card}>
+        <p className={styles.question}>대본을 끝까지 읽었나요?</p>
+        <p className={styles.muted}>말 속도는 대본 전체를 읽었을 때만 잴 수 있어요.</p>
+        <div className={styles.actions}>
+          <button className={styles.primary} type="button" onClick={() => answerReadToEnd(step.record, true)}>
+            예
+          </button>
+          <button className={styles.secondary} type="button" onClick={() => answerReadToEnd(step.record, false)}>
+            아니요
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const running = step.name === "running";
+  const elapsed = running ? Math.max(0, (now - step.startedAt) / 1000) : 0;
+
+  return (
+    <section className={styles.card}>
+      <h2>리허설</h2>
+      {running || step.name === "stopping" ? (
+        <p className={styles.rehearsalStatus} aria-live="polite">
+          <span>
+            {formatTime(elapsed)} / 제한 {formatTime(limitSeconds)}
+          </span>
+          <span className={speaking ? styles.speaking : styles.muted}>{speaking ? "말하는 중" : "조용함"}</span>
+        </p>
+      ) : (
+        <p className={styles.muted}>
+          &quot;리허설 시작&quot;을 누르고 대본을 보며 소리 내어 발표해 주세요. 다 끝나면 &quot;끝&quot;을 눌러 주세요.
+        </p>
+      )}
+      {step.name === "ready" && step.error && (
+        <p className={styles.alert} role="alert">
+          {step.error}
+        </p>
+      )}
+
+      <div className={styles.scriptView}>{script}</div>
+
+      <div className={styles.actions}>
+        {running || step.name === "stopping" ? (
+          <button className={styles.primary} type="button" onClick={() => void stop()} disabled={!running}>
+            {running ? "끝" : "정리하는 중…"}
+          </button>
+        ) : (
+          <button
+            className={styles.primary}
+            type="button"
+            onClick={() => void start()}
+            disabled={step.name === "starting"}
+          >
+            {step.name === "starting" ? "마이크 켜는 중…" : "리허설 시작"}
+          </button>
+        )}
+        <button className={styles.secondary} type="button" onClick={onRestart} disabled={running}>
+          처음으로
+        </button>
+      </div>
+      <p className={styles.muted}>{REHEARSAL_NOTICE}</p>
+    </section>
+  );
+}
+
+function DeliveryReport({
+  result,
+  onAgain,
+  onRestart,
+}: {
+  result: DeliveryResult;
+  onAgain: () => void;
+  onRestart: () => void;
+}) {
+  return (
+    <div className={styles.report}>
+      <section className={styles.card}>
+        <h2>말투 점수</h2>
+        {result.measured ? (
+          <>
+            <p className={styles.total}>
+              {result.total}점 <span className={styles.muted}>/ 100</span>
+              {result.totalNote && <span className={styles.tag}> {result.totalNote}</span>}
+            </p>
+            <dl className={styles.details}>
+              {deliveryItems(result).map((item) => (
+                <Detail key={item.label} label={item.label}>
+                  <strong>{item.score}</strong> · {item.reason}
+                </Detail>
+              ))}
+            </dl>
+            <h3>{SILENCE_SECONDS}초 넘게 멈춘 곳</h3>
+            {result.silences.length === 0 ? (
+              <p className={styles.muted}>없어요.</p>
+            ) : (
+              <ul className={styles.itemList}>
+                {result.silences.map((silence) => (
+                  <li key={silence.start}>{silenceLabel(silence)}</li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <>
+            <p className={styles.alert}>{result.message}</p>
+            <p className={styles.muted}>
+              말한 시간이 {Math.round(result.spokenSeconds)}초예요. {MIN_SPOKEN_SECONDS}초 이상 말해야 점수를 낼 수
+              있어요.
+            </p>
+          </>
+        )}
+      </section>
+
+      <p className={styles.muted}>{DESIGN_VALUE_NOTICE}</p>
+      <p className={styles.muted}>{SPEED_LIMIT_NOTICE}</p>
+      <div className={styles.actions}>
+        <button className={styles.primary} type="button" onClick={onAgain}>
+          다시 리허설
+        </button>
         <button className={styles.secondary} type="button" onClick={onRestart}>
           처음으로
         </button>
