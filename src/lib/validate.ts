@@ -1,3 +1,4 @@
+import { IMPROVEMENT_COUNT, MAX_SUMMARY_SENTENCES, QUESTION_COUNT, STRENGTH_COUNT } from "./coachConfig";
 import {
   CRITERIA,
   QUESTION_TYPES,
@@ -16,9 +17,9 @@ import {
 // Pure functions only: no network, no browser APIs.
 
 export const REQUIRED_COUNTS: Record<Section, number> = {
-  strengths: 2,
-  improvements: 3,
-  questions: 3,
+  strengths: STRENGTH_COUNT,
+  improvements: IMPROVEMENT_COUNT,
+  questions: QUESTION_COUNT,
 };
 
 const SECTION_LABELS: Record<Section, string> = {
@@ -110,9 +111,6 @@ function oneQuestionPerType(questions: Question[]): Question[] {
     (q): q is Question => q !== undefined,
   );
 }
-
-// The summary is strength, first fix, an optional notice, and encouragement.
-const MAX_SUMMARY_SENTENCES = 4;
 
 // Extra sentences are dropped from the middle so the closing encouragement survives.
 function limitSummary(value: string): string {

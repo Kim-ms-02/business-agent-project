@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { QUESTION_COUNT } from "@/lib/coachConfig";
 import {
   appendTranscript,
   canDictate,
@@ -101,7 +102,7 @@ export default function Home() {
     <main className={styles.page}>
       <header className={styles.header}>
         <h1>발표 코치</h1>
-        <p>대본을 넣으면 심사위원처럼 질문 3개를 물어봐요. 다 답하면 대본과 답변 평가를 보여 줘요.</p>
+        <p>대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 물어봐요. 다 답하면 대본과 답변 평가를 보여 줘요.</p>
       </header>
 
       {phase.name === "input" && (
