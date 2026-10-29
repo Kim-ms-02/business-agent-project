@@ -67,3 +67,26 @@
   cursor: default;
   opacity: 0.6;
 }
+
+.left {
+  right: auto;
+  left: 16px;
+  width: 240px;
+}
+
+.video {
+  width: 100%;
+  border-radius: 6px;
+  transform: scaleX(-1);
+}
+
+.values {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.values dt {
+  color: var(--muted);
+}

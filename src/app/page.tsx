@@ -44,6 +44,7 @@ import {
 } from "@/lib/validate";
 import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./page.module.css";
+import FaceDebug from "./FaceDebug";
 import VoiceDebug from "./VoiceDebug";
 
 type Phase =
@@ -287,7 +288,12 @@ export default function Home() {
         />
       )}
 
-      {process.env.NODE_ENV === "development" && <VoiceDebug />}
+      {process.env.NODE_ENV === "development" && (
+        <>
+          <VoiceDebug />
+          <FaceDebug />
+        </>
+      )}
     </main>
   );
 }
