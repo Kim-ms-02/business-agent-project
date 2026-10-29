@@ -7,6 +7,7 @@ import {
   type Question,
   type QuestionType,
   type Review,
+  type ReviewResult,
   type Section,
   type Shortage,
   type Strength,
@@ -40,13 +41,23 @@ function text(value: unknown): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
-// Everything except quotes is read aloud, so markdown marks and brackets are removed.
-const SPOKEN_NOISE = /[*#_`~>[\]{}()]/g;
+// Screen text is shown as plain text, so markdown marks would appear as-is.
+const MARKDOWN = /[*#_`~]/g;
+// Questions are read aloud, so brackets and other symbols are removed too.
+const SPOKEN_NOISE = /[*#_`~<>[\]{}()]/g;
 
-function spoken(value: unknown): string | null {
+function cleaned(value: unknown, noise: RegExp): string | null {
   const raw = text(value);
   if (raw === null) return null;
-  return text(raw.replace(SPOKEN_NOISE, "").replace(/\s{2,}/g, " "));
+  return text(raw.replace(noise, "").replace(/\s{2,}/g, " "));
+}
+
+function screen(value: unknown): string | null {
+  return cleaned(value, MARKDOWN);
+}
+
+function spoken(value: unknown): string | null {
+  return cleaned(value, SPOKEN_NOISE);
 }
 
 function criterion(value: unknown): Criterion | null {
@@ -66,15 +77,15 @@ function list(value: unknown): Raw[] {
 function toStrength(raw: Raw): Strength | null {
   const c = criterion(raw.criterion);
   const quote = text(raw.quote);
-  const why = spoken(raw.why);
+  const why = screen(raw.why);
   return c && quote && why ? { criterion: c, quote, why } : null;
 }
 
 function toImprovement(raw: Raw): Improvement | null {
   const c = criterion(raw.criterion);
   const quote = text(raw.quote);
-  const problem = spoken(raw.problem);
-  const tryThis = spoken(raw.tryThis);
+  const problem = screen(raw.problem);
+  const tryThis = screen(raw.tryThis);
   return c && quote && problem && tryThis ? { criterion: c, quote, problem, tryThis } : null;
 }
 
@@ -82,7 +93,7 @@ function toQuestion(raw: Raw): Question | null {
   const type = questionType(raw.type);
   const quote = text(raw.quote);
   const question = spoken(raw.question);
-  const goodAnswer = spoken(raw.goodAnswer);
+  const goodAnswer = screen(raw.goodAnswer);
   return type && quote && question && goodAnswer ? { type, quote, question, goodAnswer } : null;
 }
 
@@ -110,7 +121,7 @@ function limitSentences(value: string, max: number): string {
  */
 export function normalizeReview(raw: unknown): Review | null {
   if (!isRecord(raw)) return null;
-  const summary = spoken(raw.summary);
+  const summary = screen(raw.summary);
   if (summary === null) return null;
 
   return {
@@ -146,6 +157,20 @@ export function chooseReview(first: Review, retry: Review | null): Review {
   if (retry === null) return first;
   if (findShortages(retry).length === 0) return retry;
   return itemCount(retry) > itemCount(first) ? retry : first;
+}
+
+// ---------- Screen flow ----------
+
+type ReviewErrorKind = Extract<ReviewResult, { ok: false }>["kind"];
+
+/** A broken response is asked for once more without the user pressing anything. */
+export function shouldAutoRetry(kind: ReviewErrorKind, retriesSoFar: number): boolean {
+  return kind === "invalid_response" && retriesSoFar === 0;
+}
+
+/** What the practice screen may show. The evaluation stays hidden until the end. */
+export function practiceQuestions(review: CheckedReview): Pick<Question, "type" | "question">[] {
+  return review.questions.map(({ type, question }) => ({ type, question }));
 }
 
 // ---------- Quote check ----------
