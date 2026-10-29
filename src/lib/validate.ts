@@ -208,11 +208,30 @@ export function firstSecondsText(value: string, seconds: number): string {
 
 // ---------- Read-aloud ----------
 
-/** Splits text into sentences for speech. A period inside a number ("2.5") does not end a sentence. */
+const QUOTE_CLOSERS: Record<string, string> = { '"': '"', "“": "”", "‘": "’", "「": "」", "『": "』" };
+
+/**
+ * Splits text into sentences. A sentence ends at . ? ! followed by a space or the line end,
+ * so "2.5" does not split, and nothing inside quotation marks splits.
+ */
 export function splitSentences(value: string): string[] {
-  return value
-    .split(/\n+/)
-    .flatMap((line) => line.split(/(?<=[.?!])\s+/))
-    .map((s) => s.trim())
-    .filter((s) => s !== "");
+  const sentences: string[] = [];
+  for (const line of value.split(/\n+/)) {
+    const chars = [...line];
+    let current = "";
+    let closer: string | null = null;
+    chars.forEach((char, i) => {
+      current += char;
+      if (closer !== null) {
+        if (char === closer) closer = null;
+      } else if (char in QUOTE_CLOSERS) {
+        closer = QUOTE_CLOSERS[char];
+      } else if (/[.?!]/.test(char) && (i === chars.length - 1 || /\s/.test(chars[i + 1]))) {
+        sentences.push(current);
+        current = "";
+      }
+    });
+    sentences.push(current);
+  }
+  return sentences.map((s) => s.trim()).filter((s) => s !== "");
 }
