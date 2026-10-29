@@ -10,9 +10,22 @@ export function stripFrontmatter(text: string): string {
   return text.replace(FRONTMATTER, "").trimStart();
 }
 
-let cached: string | null = null;
-
-export function loadSkill(): string {
-  cached ??= stripFrontmatter(readFileSync(SKILL_PATH, "utf8"));
-  return cached;
+// The dev server reads the file on every call so edits to the rules apply without a restart.
+// The built app reads it once.
+export function shouldCacheSkill(env: string | undefined): boolean {
+  return env !== "development";
 }
+
+export function createSkillLoader(read: () => string, cache: boolean): () => string {
+  let cached: string | null = null;
+  return () => {
+    if (!cache) return stripFrontmatter(read());
+    cached ??= stripFrontmatter(read());
+    return cached;
+  };
+}
+
+export const loadSkill = createSkillLoader(
+  () => readFileSync(SKILL_PATH, "utf8"),
+  shouldCacheSkill(process.env.NODE_ENV),
+);
