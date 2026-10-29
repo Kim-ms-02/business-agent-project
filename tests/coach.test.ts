@@ -45,7 +45,7 @@ function reviewInput(improvementCount = 3) {
 }
 
 function message(content: unknown[], stop_reason = "tool_use") {
-  return { content, stop_reason } as unknown as Anthropic.Beta.BetaMessage;
+  return { content, stop_reason } as unknown as Anthropic.Message;
 }
 function toolReply(toolInput: unknown) {
   return message([{ type: "tool_use", id: "t1", name: REVIEW_TOOL.name, input: toolInput }]);
@@ -144,6 +144,14 @@ describe("reviewScript", () => {
     expect(params.system).toBe(loadSkill());
     expect(params.tools).toEqual([REVIEW_TOOL]);
     expect(params.tool_choice).toEqual({ type: "auto" });
+  });
+
+  it("does not ask for a fallback model, so the requested model always answers", async () => {
+    const create = vi.fn<CreateMessage>().mockResolvedValue(toolReply(reviewInput()));
+    await reviewScript(input, create, "m");
+    const params = create.mock.calls[0][0];
+    expect(params).not.toHaveProperty("fallbacks");
+    expect(params).not.toHaveProperty("betas");
   });
 
   it("returns a checked review with quote marks and the estimated time", async () => {
