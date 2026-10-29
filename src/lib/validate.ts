@@ -2,6 +2,9 @@ import { IMPROVEMENT_COUNT, MAX_SUMMARY_SENTENCES, QUESTION_COUNT, STRENGTH_COUN
 import {
   CRITERIA,
   QUESTION_TYPES,
+  VERDICTS,
+  type AnswerEvaluation,
+  type AnswerFeedback,
   type CheckedReview,
   type Criterion,
   type Improvement,
@@ -12,6 +15,7 @@ import {
   type Section,
   type Shortage,
   type Strength,
+  type Verdict,
 } from "./types";
 
 // Pure functions only: no network, no browser APIs.
@@ -208,6 +212,46 @@ export function isAnswered(answer: string): boolean {
 
 export function answerLabel(answer: string): string {
   return isAnswered(answer) ? answer.trim() : "답하지 않음";
+}
+
+function verdict(value: unknown): Verdict | null {
+  const raw = text(value);
+  return VERDICTS.find((v) => v === raw) ?? null;
+}
+
+// Each feedback field holds one sentence, so the feedback is always three sentences.
+function oneSentence(value: unknown): string | null {
+  const cleaned = screen(value);
+  return cleaned === null ? null : (splitSentences(cleaned)[0] ?? null);
+}
+
+/** Cleans Claude's answer evaluations, keyed by question number (1-based). Null when unusable. */
+export function normalizeAnswerFeedback(raw: unknown): Map<number, AnswerFeedback> | null {
+  if (!isRecord(raw) || !Array.isArray(raw.evaluations)) return null;
+  const found = new Map<number, AnswerFeedback>();
+  for (const item of list(raw.evaluations)) {
+    const n = item.questionNumber;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || found.has(n)) continue;
+    const v = verdict(item.verdict);
+    const wentWell = oneSentence(item.wentWell);
+    const missing = oneSentence(item.missing);
+    const tryThis = oneSentence(item.tryThis);
+    if (v && wentWell && missing && tryThis) found.set(n, { verdict: v, wentWell, missing, tryThis });
+  }
+  return found;
+}
+
+/** One entry per question: skipped when not answered, missing when answered but not evaluated. */
+export function answerEvaluations(answers: string[], found: Map<number, AnswerFeedback>): AnswerEvaluation[] {
+  return answers.map((answer, i) => {
+    if (!isAnswered(answer)) return { status: "skipped" };
+    const feedback = found.get(i + 1);
+    return feedback ? { status: "evaluated", feedback } : { status: "missing" };
+  });
+}
+
+export function missingAnswerMessage(count: number): string {
+  return `답변 평가를 ${count}개 받지 못했어요`;
 }
 
 // ---------- Quote check ----------
