@@ -178,7 +178,7 @@ describe("normalizeReview: counts", () => {
   });
 
   it("drops a question without an answer to avoid", () => {
-    const raw = valid();
+    const raw = fullRaw();
     raw.questions[1] = { ...question("다른 설명"), avoidAnswer: "  " };
     expect(normalizeReview(raw)!.questions.map((q) => q.type)).toEqual(["근거", "개념과 범위"]);
   });
