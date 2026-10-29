@@ -32,9 +32,14 @@ describe("loadSkill", () => {
     "## 말투",
     "## 예상 질문",
     "## 답변 평가",
-    "## 꼬리 질문",
   ])("contains the section %s", (heading) => {
     expect(skill).toContain(heading);
+  });
+
+  it("evaluates the three answers at once and asks no follow-up questions in v0.1", () => {
+    expect(skill).toContain("답변 3개를 한 번에 받아서 한 번에 평가한다");
+    expect(skill).toContain("꼬리 질문은 내지 않는다");
+    expect(skill).not.toContain("## 꼬리 질문");
   });
 
   it("names all three question types", () => {
