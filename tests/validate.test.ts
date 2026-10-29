@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  answerLabel,
   checkQuotes,
   chooseReview,
   countSyllables,
   estimateSeconds,
   findShortages,
   firstSecondsText,
+  isAnswered,
   normalizeReview,
   practiceQuestions,
   quoteExists,
@@ -233,6 +235,18 @@ describe("practiceQuestions", () => {
       { type: "선택 이유", question: "질문 2" },
       { type: "한계", question: "질문 3" },
     ]);
+  });
+});
+
+describe("answers", () => {
+  it("treats blank answers as skipped", () => {
+    expect(isAnswered("저울로 쟀어요.")).toBe(true);
+    expect(isAnswered("   ")).toBe(false);
+  });
+
+  it("labels a skipped answer for the screen", () => {
+    expect(answerLabel("  저울로 쟀어요.  ")).toBe("저울로 쟀어요.");
+    expect(answerLabel("")).toBe("답하지 않음");
   });
 });
 
