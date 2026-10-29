@@ -187,11 +187,17 @@ const MAX_SCRIPT_CHARS = 20000;
 const MIN_LIMIT_SECONDS = 10;
 const MAX_LIMIT_SECONDS = 3600;
 
-/** Shared by the form and the server, so the user always sees the app's own message. */
-export function inputError(script: string, limitSeconds: unknown): string | null {
+export function scriptError(script: string): string | null {
   const trimmed = script.trim();
   if (trimmed === "") return "대본을 입력해 주세요.";
   if (trimmed.length > MAX_SCRIPT_CHARS) return "대본이 너무 길어요. 2만 자 이하로 줄여 주세요.";
+  return null;
+}
+
+/** Shared by the form and the server, so the user always sees the app's own message. */
+export function inputError(script: string, limitSeconds: unknown): string | null {
+  const problem = scriptError(script);
+  if (problem !== null) return problem;
   if (
     typeof limitSeconds !== "number" ||
     !Number.isFinite(limitSeconds) ||
