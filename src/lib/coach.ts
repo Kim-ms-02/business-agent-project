@@ -1,14 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { loadSkill } from "./skill";
 import { QUESTION_COUNT } from "./coachConfig";
+import { MAX_ITEM_SCORE, SILENCE_SECONDS } from "./deliveryConfig";
+import { silenceLabel, THREE_ITEM_NOTE } from "./deliveryScore";
 import {
   CRITERIA,
+  DELIVERY_ITEMS,
   FEEDBACK_FIELDS,
   QUESTION_TYPES,
   VERDICTS,
   type AnswerFeedback,
   type AnswerResult,
   type CoachErrorKind,
+  type DeliveryFeedback,
+  type DeliveryFeedbackResult,
+  type DeliveryItem,
+  type DeliverySummary,
   type Question,
   type ReviewResult,
 } from "./types";
@@ -22,7 +29,9 @@ import {
   inputError,
   isAnswered,
   missingAnswerMessage,
+  missingDeliveryMessage,
   normalizeAnswerFeedback,
+  normalizeDeliveryFeedback,
   normalizeReview,
   scriptError,
   shortageMessage,
@@ -118,6 +127,33 @@ export const ANSWER_TOOL = {
   },
 } satisfies Anthropic.Tool;
 
+export const DELIVERY_TOOL = {
+  name: "submit_delivery_feedback",
+  description: "리허설 말투 점수 피드백을 제출한다.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["summary", "items"],
+    properties: {
+      summary: { type: "string" },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["item", "explain", "tryThis"],
+          properties: {
+            item: { type: "string", enum: [...DELIVERY_ITEMS] },
+            explain: { type: "string" },
+            tryThis: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+} satisfies Anthropic.Tool;
+
 // ---------- Input ----------
 
 export interface ReviewInput {
@@ -183,6 +219,58 @@ export function parseAnswerInput(body: unknown): { ok: true; input: AnswerInput 
   return { ok: true, input: { script, questions: questions as Question[], answers: answers as string[] } };
 }
 
+export type DeliveryInput = DeliverySummary;
+
+const MAX_REASON_CHARS = 200;
+const MAX_SILENCES = 100;
+
+function isWhole(value: unknown, min: number, max: number): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function toDeliveryItem(value: unknown): DeliverySummary["items"][number] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  const item = DELIVERY_ITEMS.find((name) => name === raw.item);
+  const score = raw.score === null ? null : isWhole(raw.score, 1, MAX_ITEM_SCORE) ? raw.score : undefined;
+  const reason = typeof raw.reason === "string" ? raw.reason.trim() : "";
+  if (!item || score === undefined || reason === "" || reason.length > MAX_REASON_CHARS) return null;
+  return { item, score, reason };
+}
+
+function toSilence(value: unknown): DeliverySummary["silences"][number] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { start, end } = value as Record<string, unknown>;
+  if (typeof start !== "number" || typeof end !== "number") return null;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return null;
+  return { start, end };
+}
+
+/** Checks the score summary from the screen: four known items, scores 1–4 or none, short reasons. */
+export function parseDeliveryInput(body: unknown): { ok: true; input: DeliveryInput } | { ok: false; message: string } {
+  if (typeof body !== "object" || body === null) return { ok: false, message: BAD_FORMAT };
+  const raw = body as Record<string, unknown>;
+  if (!isWhole(raw.total, 0, 100) || !Array.isArray(raw.items) || !Array.isArray(raw.silences)) {
+    return { ok: false, message: BAD_FORMAT };
+  }
+
+  const items = raw.items.map(toDeliveryItem);
+  const names = new Set(items.map((i) => i?.item));
+  if (items.length !== DELIVERY_ITEMS.length || items.some((i) => i === null) || names.size !== items.length) {
+    return { ok: false, message: BAD_FORMAT };
+  }
+  const checked = items as DeliverySummary["items"];
+  if (checked.every((i) => i.score === null)) return { ok: false, message: BAD_FORMAT };
+
+  const silences = raw.silences.map(toSilence);
+  if (silences.length > MAX_SILENCES || silences.some((s) => s === null)) return { ok: false, message: BAD_FORMAT };
+
+  return {
+    ok: true,
+    input: { total: raw.total, items: checked, silences: silences as DeliverySummary["silences"] },
+  };
+}
+
 // Angle brackets from the user become full-width so the text cannot close our tags early.
 // Quote checks ignore punctuation, so quotes still match the original script.
 function inert(value: string): string {
@@ -219,6 +307,20 @@ export function buildAnswerMessage(input: AnswerInput): string {
     ];
   });
   return [...blocks, `<script>\n${inert(input.script)}\n</script>`].join("\n\n");
+}
+
+/** The user message for delivery feedback: scored items, reason numbers, and silence times. No script. */
+export function buildDeliveryMessage(input: DeliveryInput): string {
+  const scored = input.items.filter((i) => i.score !== null);
+  const note = scored.length < input.items.length ? ` · ${THREE_ITEM_NOTE}` : "";
+  const silences = input.silences.length === 0 ? "없음" : input.silences.map(silenceLabel).join(", ");
+  const lines = [
+    `총점: ${input.total}점 (100점 만점)${note}`,
+    `점수를 매긴 항목: ${scored.map((i) => i.item).join(", ")}`,
+    ...scored.map((i) => `${i.item}: ${i.score}점 / ${MAX_ITEM_SCORE}점 · ${inert(i.reason)}`),
+    `${SILENCE_SECONDS}초 넘게 멈춘 시각: ${silences}`,
+  ];
+  return `<delivery>\n${lines.join("\n")}\n</delivery>`;
 }
 
 // ---------- Errors ----------
@@ -354,4 +456,51 @@ export async function evaluateAnswers(input: AnswerInput, create: CreateMessage,
     evaluations: answerEvaluations(input.answers, found),
     notices: missing > 0 ? [missingAnswerMessage(missing)] : [],
   };
+}
+
+async function requestDeliveryFeedback(input: DeliveryInput, create: CreateMessage, model: string) {
+  const response = await create({
+    model,
+    max_tokens: 16000,
+    system: loadSkill(),
+    tools: [DELIVERY_TOOL],
+    tool_choice: { type: "auto" },
+    messages: [{ role: "user", content: buildDeliveryMessage(input) }],
+  });
+  if (response.stop_reason === "refusal") throw new RefusedError();
+
+  const scores = new Map<DeliveryItem, number | null>(input.items.map((i) => [i.item, i.score]));
+  const call = response.content.find((block) => block.type === "tool_use" && block.name === DELIVERY_TOOL.name);
+  const feedback = call && "input" in call ? normalizeDeliveryFeedback(call.input, scores) : null;
+  if (feedback === null) throw new InvalidResponseError("missing or unusable delivery tool call");
+  return feedback;
+}
+
+/** Explains the rehearsal scores in words. Missing items are asked for once more. */
+export async function coachDelivery(
+  input: DeliveryInput,
+  create: CreateMessage,
+  model: string,
+): Promise<DeliveryFeedbackResult> {
+  let feedback: DeliveryFeedback;
+  try {
+    feedback = await requestDeliveryFeedback(input, create, model);
+  } catch (error) {
+    const kind = classifyError(error);
+    return { ok: false, kind, message: ERROR_MESSAGES[kind] };
+  }
+
+  const expected = input.items.filter((i) => i.score !== null).length;
+  if (feedback.items.length < expected) {
+    const retry = await requestDeliveryFeedback(input, create, model).catch(() => null);
+    if (retry) {
+      // The first feedback wins; the retry only fills the gaps.
+      const have = new Set(feedback.items.map((i) => i.item));
+      const items = [...feedback.items, ...retry.items.filter((i) => !have.has(i.item))];
+      feedback = { ...feedback, items: DELIVERY_ITEMS.flatMap((name) => items.find((i) => i.item === name) ?? []) };
+    }
+  }
+
+  const missing = expected - feedback.items.length;
+  return { ok: true, feedback, notices: missing > 0 ? [missingDeliveryMessage(missing)] : [] };
 }
