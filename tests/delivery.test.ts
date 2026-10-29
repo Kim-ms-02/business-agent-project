@@ -266,6 +266,12 @@ describe("skill file: delivery feedback", () => {
     expect(skill).toContain("점수를 바꾸거나 새로 매기지 않는다");
   });
 
+  it("uses the examples only as hints and writes each thing to try with this rehearsal's numbers", () => {
+    const section = skill.slice(skill.indexOf("## 말투 피드백"), skill.indexOf("## 결과 내는 방법"));
+    expect(section).toContain("예시는 참고만 하고 그대로 옮기지 않는다");
+    expect(section).toContain("이번 측정값");
+  });
+
   it("names the delivery tool in the output rules", () => {
     expect(skill).toContain(DELIVERY_TOOL.name);
   });
