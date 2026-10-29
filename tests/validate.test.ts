@@ -107,9 +107,17 @@ describe("normalizeReview: broken responses", () => {
 });
 
 describe("normalizeReview: summary length", () => {
-  it("keeps only the first 4 sentences of the summary", () => {
-    const raw = { ...fullRaw(), summary: "강점이에요. 먼저 고칠 점이에요. 마무리도 약해요. 잘하고 있어요. 다섯째 문장이에요." };
+  it("keeps the first 3 sentences and the last one (encouragement) when longer than 4", () => {
+    const raw = {
+      ...fullRaw(),
+      summary: "강점이에요. 먼저 고칠 점이에요. 마무리도 약해요. 덧붙인 설명이에요. 잘하고 있어요.",
+    };
     expect(normalizeReview(raw)!.summary).toBe("강점이에요. 먼저 고칠 점이에요. 마무리도 약해요. 잘하고 있어요.");
+  });
+
+  it("drops every middle sentence after the third, however long the summary is", () => {
+    const raw = { ...fullRaw(), summary: "하나예요. 둘이에요. 셋이에요. 넷이에요. 다섯이에요. 여섯이에요. 격려예요." };
+    expect(normalizeReview(raw)!.summary).toBe("하나예요. 둘이에요. 셋이에요. 격려예요.");
   });
 
   it("leaves a summary of 4 sentences or fewer as it is", () => {
@@ -123,7 +131,7 @@ describe("normalizeReview: summary length", () => {
   it("never cuts the summary in the middle of a quotation", () => {
     const raw = {
       ...fullRaw(),
-      summary: '강점이에요. 결과에 숫자가 없어요. 마지막도 "이상입니다. 감사합니다."로 끝나요. 잘하고 있어요. 다섯째예요.',
+      summary: '강점이에요. 결과에 숫자가 없어요. 마지막도 "이상입니다. 감사합니다."로 끝나요. 덧붙인 설명이에요. 잘하고 있어요.',
     };
     expect(normalizeReview(raw)!.summary).toBe(
       '강점이에요. 결과에 숫자가 없어요. 마지막도 "이상입니다. 감사합니다."로 끝나요. 잘하고 있어요.',
@@ -131,8 +139,8 @@ describe("normalizeReview: summary length", () => {
   });
 
   it("counts sentences on separate lines and joins them with spaces", () => {
-    const raw = { ...fullRaw(), summary: "하나예요.\n둘이에요.\n셋이에요.\n넷이에요.\n다섯이에요." };
-    expect(normalizeReview(raw)!.summary).toBe("하나예요. 둘이에요. 셋이에요. 넷이에요.");
+    const raw = { ...fullRaw(), summary: "하나예요.\n둘이에요.\n셋이에요.\n넷이에요.\n격려예요." };
+    expect(normalizeReview(raw)!.summary).toBe("하나예요. 둘이에요. 셋이에요. 격려예요.");
   });
 });
 
