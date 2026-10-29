@@ -27,14 +27,14 @@ function improvement(n: number) {
   return { criterion: "근거", quote: `고칠 인용 ${n}`, problem: `문제 ${n}`, tryThis: `고친 문장 ${n}` };
 }
 function question(type: string, n = 1) {
-  return { type, quote: `질문 인용 ${n}`, question: `질문 ${n}`, goodAnswer: `좋은 답 ${n}` };
+  return { type, quote: `질문 인용 ${n}`, question: `질문 ${n}`, goodAnswer: `좋은 답 ${n}`, avoidAnswer: `피할 답 ${n}` };
 }
 function fullRaw() {
   return {
     summary: "총평이에요.",
     strengths: [strength(1), strength(2)],
     improvements: [improvement(1), improvement(2), improvement(3)],
-    questions: [question("근거", 1), question("선택 이유", 2), question("한계", 3)],
+    questions: [question("근거", 1), question("다른 설명", 2), question("개념과 범위", 3)],
   };
 }
 
@@ -89,11 +89,16 @@ describe("normalizeReview: broken responses", () => {
     const raw = fullRaw();
     raw.summary = "**총평**이에요 (짧게).";
     raw.improvements[0] = { ...improvement(1), problem: "# 근거가 _없어요_." };
-    raw.questions[0] = { ...question("근거"), goodAnswer: "`출처`를 말해요 (조사 시점 포함)." };
+    raw.questions[0] = {
+      ...question("근거"),
+      goodAnswer: "`출처`를 말해요 (조사 시점 포함).",
+      avoidAnswer: "**다들 좋다고 했어요**처럼 느낌만 말하기.",
+    };
     const review = normalizeReview(raw)!;
     expect(review.summary).toBe("총평이에요 (짧게).");
     expect(review.improvements[0].problem).toBe("근거가 없어요.");
     expect(review.questions[0].goodAnswer).toBe("출처를 말해요 (조사 시점 포함).");
+    expect(review.questions[0].avoidAnswer).toBe("다들 좋다고 했어요처럼 느낌만 말하기.");
   });
 
   it("removes markdown, symbols, and brackets from questions because they are read aloud", () => {
@@ -157,19 +162,25 @@ describe("normalizeReview: counts", () => {
     expect(review.improvements).toEqual([improvement(1), improvement(2), improvement(3)]);
   });
 
-  it("keeps one question per type, in the order 근거, 선택 이유, 한계", () => {
+  it("keeps one question per type, in the order 근거, 다른 설명, 개념과 범위", () => {
     const raw = fullRaw();
-    raw.questions = [question("한계", 1), question("근거", 2), question("근거", 3), question("선택 이유", 4)];
+    raw.questions = [question("개념과 범위", 1), question("근거", 2), question("근거", 3), question("다른 설명", 4)];
     const types = normalizeReview(raw)!.questions.map((q) => q.type);
-    expect(types).toEqual(["근거", "선택 이유", "한계"]);
+    expect(types).toEqual(["근거", "다른 설명", "개념과 범위"]);
     expect(new Set(types).size).toBe(types.length);
     expect(normalizeReview(raw)!.questions[0].question).toBe("질문 2");
   });
 
   it("drops questions with an unknown type", () => {
     const raw = fullRaw();
-    raw.questions = [question("근거"), question("감상"), question("한계")];
-    expect(normalizeReview(raw)!.questions.map((q) => q.type)).toEqual(["근거", "한계"]);
+    raw.questions = [question("근거"), question("선택 이유"), question("개념과 범위")];
+    expect(normalizeReview(raw)!.questions.map((q) => q.type)).toEqual(["근거", "개념과 범위"]);
+  });
+
+  it("drops a question without an answer to avoid", () => {
+    const raw = valid();
+    raw.questions[1] = { ...question("다른 설명"), avoidAnswer: "  " };
+    expect(normalizeReview(raw)!.questions.map((q) => q.type)).toEqual(["근거", "개념과 범위"]);
   });
 });
 
@@ -233,8 +244,8 @@ describe("practiceQuestions", () => {
     const checked = checkQuotes(normalizeReview(fullRaw())!, script);
     expect(practiceQuestions(checked)).toEqual([
       { type: "근거", question: "질문 1" },
-      { type: "선택 이유", question: "질문 2" },
-      { type: "한계", question: "질문 3" },
+      { type: "다른 설명", question: "질문 2" },
+      { type: "개념과 범위", question: "질문 3" },
     ]);
   });
 });

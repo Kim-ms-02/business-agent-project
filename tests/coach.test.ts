@@ -37,9 +37,9 @@ function reviewInput(improvementCount = 3) {
       tryThis: "숫자를 넣어 보세요.",
     })),
     questions: [
-      { type: "근거", quote: quotes.c, question: "무엇으로 쟀나요?", goodAnswer: "잰 방법" },
-      { type: "선택 이유", quote: quotes.a, question: "왜 이렇게 했나요?", goodAnswer: "이유" },
-      { type: "한계", quote: quotes.b, question: "어디까지 믿을 수 있나요?", goodAnswer: "한계" },
+      { type: "근거", quote: quotes.c, question: "무엇으로 쟀나요?", goodAnswer: "잰 방법", avoidAnswer: "느낌" },
+      { type: "다른 설명", quote: quotes.a, question: "다른 이유는요?", goodAnswer: "비교", avoidAnswer: "부정" },
+      { type: "개념과 범위", quote: quotes.b, question: "어디까지인가요?", goodAnswer: "범위", avoidAnswer: "과장" },
     ],
   };
 }
@@ -103,6 +103,10 @@ describe("buildReviewMessage", () => {
 describe("REVIEW_TOOL", () => {
   it("is strict so arguments match the schema", () => {
     expect(REVIEW_TOOL.strict).toBe(true);
+  });
+
+  it("requires an answer to avoid for every question", () => {
+    expect(REVIEW_TOOL.input_schema.properties.questions.items.required).toContain("avoidAnswer");
   });
 
   it("is named in the skill file so Claude knows to call it", () => {
