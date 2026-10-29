@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadSkill, stripFrontmatter } from "@/lib/skill";
+import { createSkillLoader, loadSkill, shouldCacheSkill, stripFrontmatter } from "@/lib/skill";
 
 describe("stripFrontmatter", () => {
   it("removes the YAML frontmatter block", () => {
@@ -14,6 +14,44 @@ describe("stripFrontmatter", () => {
   it("handles Windows line endings", () => {
     const text = "---\r\nname: x\r\n---\r\n# Title";
     expect(stripFrontmatter(text)).toBe("# Title");
+  });
+});
+
+describe("shouldCacheSkill", () => {
+  it("reads the skill file again on every call in the dev server, so edits apply without a restart", () => {
+    expect(shouldCacheSkill("development")).toBe(false);
+  });
+
+  it("reads it only once in the built app and in tests", () => {
+    expect(shouldCacheSkill("production")).toBe(true);
+    expect(shouldCacheSkill("test")).toBe(true);
+    expect(shouldCacheSkill(undefined)).toBe(true);
+  });
+});
+
+describe("createSkillLoader", () => {
+  function counter() {
+    let reads = 0;
+    return {
+      read: () => `---\nname: x\n---\n# 규칙 ${++reads}`,
+      reads: () => reads,
+    };
+  }
+
+  it("reads once and keeps the text when caching", () => {
+    const file = counter();
+    const load = createSkillLoader(file.read, true);
+    expect(load()).toBe("# 규칙 1");
+    expect(load()).toBe("# 규칙 1");
+    expect(file.reads()).toBe(1);
+  });
+
+  it("reads the latest text on every call when not caching", () => {
+    const file = counter();
+    const load = createSkillLoader(file.read, false);
+    expect(load()).toBe("# 규칙 1");
+    expect(load()).toBe("# 규칙 2");
+    expect(file.reads()).toBe(2);
   });
 });
 
