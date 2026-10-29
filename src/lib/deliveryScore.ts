@@ -10,6 +10,7 @@ import {
   VOLUME_SAMPLE_SECONDS,
   type Band,
 } from "./deliveryConfig";
+import { DELIVERY_ITEMS, type DeliveryItem, type DeliverySummary } from "./types";
 
 // Pure functions only: turns a rehearsal's voice record into delivery scores.
 // No browser APIs and no recorded sound, only speech times and average volumes.
@@ -172,19 +173,34 @@ export interface DeliveryItemRow {
   reason: string;
 }
 
-export function deliveryItems(result: Extract<DeliveryResult, { measured: true }>): DeliveryItemRow[] {
+type MeasuredResult = Extract<DeliveryResult, { measured: true }>;
+
+function itemScores(result: MeasuredResult): [DeliveryItem, ItemScore][] {
   const { speed, silence, volume, time } = result.items;
-  const rows: [string, ItemScore][] = [
-    ["말 속도", speed],
-    ["침묵", silence],
-    ["목소리 크기", volume],
-    ["제한 시간", time],
+  const [speedLabel, silenceLabel, volumeLabel, timeLabel] = DELIVERY_ITEMS;
+  return [
+    [speedLabel, speed],
+    [silenceLabel, silence],
+    [volumeLabel, volume],
+    [timeLabel, time],
   ];
-  return rows.map(([label, item]) => ({
+}
+
+export function deliveryItems(result: MeasuredResult): DeliveryItemRow[] {
+  return itemScores(result).map(([label, item]) => ({
     label,
     score: item.score === null ? "점수 없음" : `${item.score} / ${MAX_ITEM_SCORE}`,
     reason: item.reason,
   }));
+}
+
+/** What is sent for coach feedback. The voice record itself stays in the browser. */
+export function deliverySummary(result: MeasuredResult): DeliverySummary {
+  return {
+    total: result.total,
+    items: itemScores(result).map(([item, { score, reason }]) => ({ item, score, reason })),
+    silences: result.silences.map(({ start, end }) => ({ start, end })),
+  };
 }
 
 export function silenceLabel(silence: SpeechSegment): string {
