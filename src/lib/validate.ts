@@ -176,6 +176,17 @@ export function practiceQuestions(review: CheckedReview): Pick<Question, "type" 
   return review.questions.map(({ type, question }) => ({ type, question }));
 }
 
+// ---------- Answers ----------
+
+// Skipping a question is allowed; a blank answer counts as skipped.
+export function isAnswered(answer: string): boolean {
+  return answer.trim() !== "";
+}
+
+export function answerLabel(answer: string): string {
+  return isAnswered(answer) ? answer.trim() : "답하지 않음";
+}
+
 // ---------- Quote check ----------
 
 // Quotes shorter than this (after removing spaces and punctuation) match too easily to count as evidence.
