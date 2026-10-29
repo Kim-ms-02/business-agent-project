@@ -7,6 +7,7 @@ import {
   DESIGN_VALUE_NOTICE,
   SPEED_LIMIT_NOTICE,
   deliveryItems,
+  deliverySummary,
   formatTime,
   scoreDelivery,
   silenceLabel,
@@ -21,7 +22,16 @@ import {
   speak,
   startListening,
 } from "@/lib/speech";
-import type { AnswerEvaluation, AnswerResult, CheckedReview, Question, ReviewResult } from "@/lib/types";
+import type {
+  AnswerEvaluation,
+  AnswerResult,
+  CheckedReview,
+  DeliveryFeedback,
+  DeliveryFeedbackResult,
+  DeliverySummary,
+  Question,
+  ReviewResult,
+} from "@/lib/types";
 import {
   answerLabel,
   countSyllables,
@@ -548,11 +558,33 @@ type RehearsalStep =
   | { name: "askReadToEnd"; record: VoiceRecord }
   | { name: "result"; result: DeliveryResult };
 
+type CoachState =
+  | { name: "none" }
+  | { name: "loading"; retrying: boolean }
+  | { name: "failed"; message: string }
+  | { name: "done"; feedback: DeliveryFeedback; notices: string[] };
+
+async function requestDeliveryFeedback(summary: DeliverySummary): Promise<DeliveryFeedbackResult> {
+  try {
+    const response = await fetch("/api/delivery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(summary),
+    });
+    return (await response.json()) as DeliveryFeedbackResult;
+  } catch {
+    return { ok: false, kind: "unknown", message: SERVER_UNREACHABLE };
+  }
+}
+
 function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitSeconds: number; onRestart: () => void }) {
   const [step, setStep] = useState<RehearsalStep>({ name: "ready", error: null });
   const [speaking, setSpeaking] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [coach, setCoach] = useState<CoachState>({ name: "none" });
   const tracker = useRef<VoiceTracker | null>(null);
+  // A reply for an earlier rehearsal is ignored once a new one has started.
+  const coachRequest = useRef(0);
 
   // Turn the microphone off if the speaker leaves in the middle of a rehearsal.
   useEffect(() => () => void tracker.current?.stop(), []);
@@ -587,13 +619,41 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   function answerReadToEnd(record: VoiceRecord, readToEnd: boolean) {
     const result = scoreDelivery({ record, scriptSyllables: countSyllables(script), limitSeconds, readToEnd });
     setStep({ name: "result", result });
+    if (result.measured) void askCoach(deliverySummary(result));
+    else setCoach({ name: "none" });
+  }
+
+  async function askCoach(summary: DeliverySummary) {
+    const id = ++coachRequest.current;
+    setCoach({ name: "loading", retrying: false });
+    let result = await requestDeliveryFeedback(summary);
+    if (!result.ok && shouldAutoRetry(result.kind, 0) && id === coachRequest.current) {
+      setCoach({ name: "loading", retrying: true });
+      result = await requestDeliveryFeedback(summary);
+    }
+    if (id !== coachRequest.current) return;
+    setCoach(
+      result.ok
+        ? { name: "done", feedback: result.feedback, notices: result.notices }
+        : { name: "failed", message: result.message },
+    );
+  }
+
+  function rehearseAgain() {
+    coachRequest.current += 1;
+    setCoach({ name: "none" });
+    setStep({ name: "ready", error: null });
   }
 
   if (step.name === "result") {
     return (
       <DeliveryReport
         result={step.result}
-        onAgain={() => setStep({ name: "ready", error: null })}
+        coach={coach}
+        onRetryCoach={() => {
+          if (step.result.measured) void askCoach(deliverySummary(step.result));
+        }}
+        onAgain={rehearseAgain}
         onRestart={onRestart}
       />
     );
@@ -668,10 +728,14 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
 
 function DeliveryReport({
   result,
+  coach,
+  onRetryCoach,
   onAgain,
   onRestart,
 }: {
   result: DeliveryResult;
+  coach: CoachState;
+  onRetryCoach: () => void;
   onAgain: () => void;
   onRestart: () => void;
 }) {
@@ -714,6 +778,8 @@ function DeliveryReport({
         )}
       </section>
 
+      {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
+
       <p className={styles.muted}>{DESIGN_VALUE_NOTICE}</p>
       <p className={styles.muted}>{SPEED_LIMIT_NOTICE}</p>
       <div className={styles.actions}>
@@ -725,5 +791,52 @@ function DeliveryReport({
         </button>
       </div>
     </div>
+  );
+}
+
+function CoachFeedback({ coach, onRetry }: { coach: Exclude<CoachState, { name: "none" }>; onRetry: () => void }) {
+  return (
+    <section className={styles.card} aria-live="polite">
+      <h2>코치 피드백</h2>
+      {coach.name === "loading" && (
+        <p className={styles.muted}>{coach.retrying ? "한 번 더 받아 오는 중이에요" : "피드백 준비 중이에요"}</p>
+      )}
+      {coach.name === "failed" && (
+        <>
+          <p className={styles.alert} role="alert">
+            {coach.message}
+          </p>
+          <div className={styles.actions}>
+            <button className={styles.secondary} type="button" onClick={onRetry}>
+              다시 시도
+            </button>
+          </div>
+        </>
+      )}
+      {coach.name === "done" && (
+        <>
+          {coach.notices.map((notice) => (
+            <p key={notice} className={styles.muted}>
+              {notice}
+            </p>
+          ))}
+          <p>{coach.feedback.summary}</p>
+          <ol className={styles.itemList}>
+            {coach.feedback.items.map((item) => (
+              <li key={item.item}>
+                <p className={styles.tag}>{item.item}</p>
+                <p>{item.explain}</p>
+                {item.tryThis && (
+                  <p className={styles.tryThis}>
+                    <strong>다음에 해 볼 것</strong> {item.tryThis}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+          <p className={styles.muted}>코치는 점수를 바꾸지 않고, 앱이 잰 숫자만 보고 풀어 줘요.</p>
+        </>
+      )}
+    </section>
   );
 }
