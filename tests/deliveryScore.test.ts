@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { scoreDelivery, type DeliveryInput, type VoiceRecord } from "@/lib/deliveryScore";
+import {
+  DESIGN_VALUE_NOTICE,
+  SPEED_LIMIT_NOTICE,
+  deliveryItems,
+  formatTime,
+  scoreDelivery,
+  silenceLabel,
+  type DeliveryInput,
+  type VoiceRecord,
+} from "@/lib/deliveryScore";
 
 // Fake voice records. Volume is sampled every 0.1 seconds over the whole rehearsal.
 const SAMPLE_SECONDS = 0.1;
@@ -220,5 +229,44 @@ describe("scoreDelivery: reasons", () => {
     expect(items.silence.reason).toContain("2번");
     expect(items.volume.reason).toContain("100%");
     expect(items.time.reason).toContain("1분 0초");
+  });
+});
+
+describe("result screen text", () => {
+  const spans: Span[] = [[0, 20], [25, 40], [45, 60]];
+
+  it("formats seconds as minutes and seconds", () => {
+    expect(formatTime(0)).toBe("0분 0초");
+    expect(formatTime(133)).toBe("2분 13초");
+    expect(formatTime(59.6)).toBe("1분 0초");
+  });
+
+  it("lists the four items in a fixed order with their scores out of 4", () => {
+    const result = measured(scoreDelivery(input({ record: record(spans, 60), scriptSyllables: 250 })));
+    expect(deliveryItems(result)).toEqual([
+      { label: "말 속도", score: "4 / 4", reason: result.items.speed.reason },
+      { label: "침묵", score: "2 / 4", reason: result.items.silence.reason },
+      { label: "목소리 크기", score: "4 / 4", reason: result.items.volume.reason },
+      { label: "제한 시간", score: "4 / 4", reason: result.items.time.reason },
+    ]);
+  });
+
+  it("shows that speed has no score when the script was not read to the end", () => {
+    const result = measured(scoreDelivery(input({ record: record(spans, 60), scriptSyllables: 250, readToEnd: false })));
+    expect(deliveryItems(result)[0]).toEqual({
+      label: "말 속도",
+      score: "점수 없음",
+      reason: "끝까지 읽어야 말 속도를 잴 수 있어요",
+    });
+  });
+
+  it("says when each silence happened and how long it was", () => {
+    expect(silenceLabel({ start: 20, end: 25 })).toBe("0분 20초부터 5초 동안");
+    expect(silenceLabel({ start: 80.4, end: 84.1 })).toBe("1분 20초부터 3.7초 동안");
+  });
+
+  it("states that the baselines are design values and that speed assumes the script was read as written", () => {
+    expect(DESIGN_VALUE_NOTICE).toContain("설계 값");
+    expect(SPEED_LIMIT_NOTICE).toContain("즉흥");
   });
 });
