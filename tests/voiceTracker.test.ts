@@ -4,6 +4,7 @@ import {
   MIC_BLOCKED_MESSAGE,
   MIC_BUSY_MESSAGE,
   MIC_FAILED_MESSAGE,
+  MicUsage,
   NO_MIC_MESSAGE,
   VoiceRecorder,
   frameRms,
@@ -180,5 +181,42 @@ describe("micErrorMessage", () => {
     for (const message of [MIC_BLOCKED_MESSAGE, NO_MIC_MESSAGE, MIC_BUSY_MESSAGE, MIC_FAILED_MESSAGE]) {
       expect(message).not.toMatch(/[A-Za-z]{3,}/);
     }
+  });
+});
+
+describe("MicUsage", () => {
+  it("knows who is using the microphone", () => {
+    const usage = new MicUsage();
+    expect(usage.owner).toBeNull();
+    usage.start("rehearsal");
+    expect(usage.owner).toBe("rehearsal");
+    usage.end("rehearsal");
+    expect(usage.owner).toBeNull();
+  });
+
+  it("says the microphone is busy only when someone else is using it", () => {
+    const usage = new MicUsage();
+    expect(usage.busyFor("debug")).toBe(false);
+    usage.start("rehearsal");
+    expect(usage.busyFor("debug")).toBe(true);
+    expect(usage.busyFor("rehearsal")).toBe(false);
+  });
+
+  it("is not freed by someone who was not using it", () => {
+    const usage = new MicUsage();
+    usage.start("rehearsal");
+    usage.end("debug");
+    expect(usage.owner).toBe("rehearsal");
+  });
+
+  it("tells listeners when it changes, until they unsubscribe", () => {
+    const usage = new MicUsage();
+    const seen: (string | null)[] = [];
+    const unsubscribe = usage.subscribe(() => seen.push(usage.owner));
+    usage.start("rehearsal");
+    usage.end("rehearsal");
+    unsubscribe();
+    usage.start("debug");
+    expect(seen).toEqual(["rehearsal", null]);
   });
 });
