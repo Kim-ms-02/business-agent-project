@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { appendTranscript, availabilityMessage, pickVoice, recognitionErrorMessage } from "@/lib/speech";
+import {
+  appendTranscript,
+  DICTATION_NOTICE,
+  NO_DICTATION_MESSAGE,
+  pickRecognition,
+  pickVoice,
+  recognitionErrorMessage,
+} from "@/lib/speech";
 
 describe("appendTranscript", () => {
   it("adds a recognized piece after what is already written, with one space", () => {
@@ -32,21 +39,32 @@ describe("pickVoice", () => {
   });
 });
 
-describe("availabilityMessage", () => {
-  it("says nothing when on-device dictation is ready", () => {
-    expect(availabilityMessage("available")).toBeNull();
+describe("pickRecognition", () => {
+  class Standard {}
+  class Prefixed {}
+
+  it("uses the standard dictation when the browser has it", () => {
+    expect(pickRecognition({ SpeechRecognition: Standard, webkitSpeechRecognition: Prefixed })).toBe(Standard);
   });
 
-  it.each(["downloadable", "downloading", "unavailable", "unsupported"] as const)(
-    "explains %s in plain words",
-    (status) => {
-      expect(availabilityMessage(status)).toMatch(/요\.$/);
-    },
-  );
+  it("falls back to the prefixed dictation in Chrome and Edge", () => {
+    expect(pickRecognition({ webkitSpeechRecognition: Prefixed })).toBe(Prefixed);
+  });
 
-  it("points to typing when dictation cannot run on this device", () => {
-    expect(availabilityMessage("unavailable")).toContain("글로 입력해 주세요");
-    expect(availabilityMessage("unsupported")).toContain("글로 입력해 주세요");
+  it("returns null when the browser has no dictation", () => {
+    expect(pickRecognition({})).toBeNull();
+  });
+});
+
+describe("dictation notices", () => {
+  it("tells the user where their voice goes", () => {
+    expect(DICTATION_NOTICE).toBe(
+      "말로 답하면 받아쓰기를 위해 목소리가 구글 서버로 전송돼요. 이 앱은 녹음을 저장하지 않아요.",
+    );
+  });
+
+  it("points to typing when the browser has no dictation", () => {
+    expect(NO_DICTATION_MESSAGE).toContain("글로 입력해 주세요");
   });
 });
 
@@ -56,6 +74,7 @@ describe("recognitionErrorMessage", () => {
     ["service-not-allowed", "마이크"],
     ["audio-capture", "마이크를 찾지 못했어요"],
     ["no-speech", "말소리가 들리지 않았어요"],
+    ["network", "인터넷"],
     ["language-not-supported", "글로 입력해 주세요"],
     ["something-new", "글로 입력해 주세요"],
   ])("explains %s", (code, phrase) => {

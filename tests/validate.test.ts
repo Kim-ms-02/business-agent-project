@@ -8,6 +8,7 @@ import {
   estimateSeconds,
   findShortages,
   firstSecondsText,
+  inputError,
   isAnswered,
   normalizeReview,
   practiceQuestions,
@@ -235,6 +236,30 @@ describe("practiceQuestions", () => {
       { type: "선택 이유", question: "질문 2" },
       { type: "한계", question: "질문 3" },
     ]);
+  });
+});
+
+describe("inputError", () => {
+  it("accepts a script and a limit between 10 seconds and 60 minutes", () => {
+    expect(inputError("대본이에요.", 180)).toBeNull();
+    expect(inputError("대본이에요.", 10)).toBeNull();
+    expect(inputError("대본이에요.", 3600)).toBeNull();
+  });
+
+  it.each([
+    ["", 180, "대본을 입력해 주세요."],
+    ["  \n ", 180, "대본을 입력해 주세요."],
+    ["가".repeat(20001), 180, "대본이 너무 길어요. 2만 자 이하로 줄여 주세요."],
+    ["대본이에요.", 5, "제한 시간을 10초에서 60분 사이로 입력해 주세요."],
+    ["대본이에요.", 3601, "제한 시간을 10초에서 60분 사이로 입력해 주세요."],
+    ["대본이에요.", Number.NaN, "제한 시간을 10초에서 60분 사이로 입력해 주세요."],
+    ["대본이에요.", "120", "제한 시간을 10초에서 60분 사이로 입력해 주세요."],
+  ])("explains what to fix in the app's own words (%#)", (script, limit, message) => {
+    expect(inputError(script, limit)).toBe(message);
+  });
+
+  it("counts the length after trimming", () => {
+    expect(inputError(` ${"가".repeat(20000)} `, 180)).toBeNull();
   });
 });
 
