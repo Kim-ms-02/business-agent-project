@@ -97,6 +97,13 @@ function oneQuestionPerType(questions: Question[]): Question[] {
   );
 }
 
+// The summary is strength, first fix, an optional notice, and encouragement.
+const MAX_SUMMARY_SENTENCES = 4;
+
+function limitSentences(value: string, max: number): string {
+  return splitSentences(value).slice(0, max).join(" ");
+}
+
 /**
  * Cleans Claude's review. Returns null when the response is unusable.
  * Invalid items are dropped; extra items are cut from the front.
@@ -107,7 +114,7 @@ export function normalizeReview(raw: unknown): Review | null {
   if (summary === null) return null;
 
   return {
-    summary,
+    summary: limitSentences(summary, MAX_SUMMARY_SENTENCES),
     strengths: list(raw.strengths).map(toStrength).filter(isPresent).slice(0, REQUIRED_COUNTS.strengths),
     improvements: list(raw.improvements)
       .map(toImprovement)
