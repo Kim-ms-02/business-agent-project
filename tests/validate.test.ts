@@ -8,7 +8,9 @@ import {
   findShortages,
   firstSecondsText,
   normalizeReview,
+  practiceQuestions,
   quoteExists,
+  shouldAutoRetry,
   shortageMessage,
   splitSentences,
 } from "@/lib/validate";
@@ -80,14 +82,27 @@ describe("normalizeReview: broken responses", () => {
     expect(review.strengths[0]).toEqual(strength(1));
   });
 
-  it("removes markdown and brackets from spoken text but keeps quotes as written", () => {
+  it("removes markdown from screen text but keeps brackets there", () => {
     const raw = fullRaw();
     raw.summary = "**총평**이에요 (짧게).";
-    raw.improvements[0] = { ...improvement(1), quote: "대본 (원문) 그대로", problem: "# 근거가 _없어요_." };
+    raw.improvements[0] = { ...improvement(1), problem: "# 근거가 _없어요_." };
+    raw.questions[0] = { ...question("근거"), goodAnswer: "`출처`를 말해요 (조사 시점 포함)." };
     const review = normalizeReview(raw)!;
-    expect(review.summary).toBe("총평이에요 짧게.");
+    expect(review.summary).toBe("총평이에요 (짧게).");
     expect(review.improvements[0].problem).toBe("근거가 없어요.");
-    expect(review.improvements[0].quote).toBe("대본 (원문) 그대로");
+    expect(review.questions[0].goodAnswer).toBe("출처를 말해요 (조사 시점 포함).");
+  });
+
+  it("removes markdown, symbols, and brackets from questions because they are read aloud", () => {
+    const raw = fullRaw();
+    raw.questions[0] = { ...question("근거"), question: "**왜** 그렇게 [정말] 하셨나요 (짧게)?" };
+    expect(normalizeReview(raw)!.questions[0].question).toBe("왜 그렇게 정말 하셨나요 짧게?");
+  });
+
+  it("keeps quotes exactly as written", () => {
+    const raw = fullRaw();
+    raw.improvements[0] = { ...improvement(1), quote: "대본 (원문) **그대로**" };
+    expect(normalizeReview(raw)!.improvements[0].quote).toBe("대본 (원문) **그대로**");
   });
 });
 
@@ -185,6 +200,31 @@ describe("chooseReview: retry once when short", () => {
 
   it("keeps the first when the retry is broken", () => {
     expect(chooseReview(short, null)).toBe(short);
+  });
+});
+
+describe("shouldAutoRetry", () => {
+  it("asks once more by itself only for a broken response", () => {
+    expect(shouldAutoRetry("invalid_response", 0)).toBe(true);
+    expect(shouldAutoRetry("invalid_response", 1)).toBe(false);
+  });
+
+  it.each(["no_key", "auth", "network", "busy", "refused", "unknown", "bad_input"] as const)(
+    "leaves %s to the try-again button",
+    (kind) => {
+      expect(shouldAutoRetry(kind, 0)).toBe(false);
+    },
+  );
+});
+
+describe("practiceQuestions", () => {
+  it("gives the practice screen only the question type and text, in order", () => {
+    const checked = checkQuotes(normalizeReview(fullRaw())!, script);
+    expect(practiceQuestions(checked)).toEqual([
+      { type: "근거", question: "질문 1" },
+      { type: "선택 이유", question: "질문 2" },
+      { type: "한계", question: "질문 3" },
+    ]);
   });
 });
 
