@@ -65,6 +65,14 @@ function spoken(value: unknown): string | null {
   return cleaned(value, SPOKEN_NOISE);
 }
 
+// The screen labels the field "이렇게 말해 보기", so the same words at the start would show twice.
+const TRY_LEAD_IN = /^이렇게 말해 (?:보세요|보기)\s*[.:：,!—–-]?\s*/;
+
+function tryThisText(value: unknown): string | null {
+  const cleanedText = screen(value);
+  return cleanedText === null ? null : text(cleanedText.replace(TRY_LEAD_IN, ""));
+}
+
 function criterion(value: unknown): Criterion | null {
   const raw = text(value);
   return CRITERIA.find((c) => c === raw) ?? null;
@@ -90,7 +98,7 @@ function toImprovement(raw: Raw): Improvement | null {
   const c = criterion(raw.criterion);
   const quote = text(raw.quote);
   const problem = screen(raw.problem);
-  const tryThis = screen(raw.tryThis);
+  const tryThis = tryThisText(raw.tryThis);
   return c && quote && problem && tryThis ? { criterion: c, quote, problem, tryThis } : null;
 }
 
@@ -226,9 +234,8 @@ function verdict(value: unknown): Verdict | null {
 }
 
 // Each feedback field holds one sentence, so the feedback is always three sentences.
-function oneSentence(value: unknown): string | null {
-  const cleaned = screen(value);
-  return cleaned === null ? null : (splitSentences(cleaned)[0] ?? null);
+function oneSentence(cleanedText: string | null): string | null {
+  return cleanedText === null ? null : (splitSentences(cleanedText)[0] ?? null);
 }
 
 /** Cleans Claude's answer evaluations, keyed by question number (1-based). Null when unusable. */
@@ -239,9 +246,9 @@ export function normalizeAnswerFeedback(raw: unknown): Map<number, AnswerFeedbac
     const n = item.questionNumber;
     if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || found.has(n)) continue;
     const v = verdict(item.verdict);
-    const wentWell = oneSentence(item.wentWell);
-    const missing = oneSentence(item.missing);
-    const tryThis = oneSentence(item.tryThis);
+    const wentWell = oneSentence(screen(item.wentWell));
+    const missing = oneSentence(screen(item.missing));
+    const tryThis = oneSentence(tryThisText(item.tryThis));
     if (v && wentWell && missing && tryThis) found.set(n, { verdict: v, wentWell, missing, tryThis });
   }
   return found;
