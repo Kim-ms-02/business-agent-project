@@ -13,7 +13,8 @@ import {
 } from "@/lib/coach";
 import { loadSkill } from "@/lib/skill";
 
-const script = readFileSync("tests/fixtures/sample-script.txt", "utf8");
+// Trimmed like a real request after parseReviewInput.
+const script = readFileSync("tests/fixtures/sample-script.txt", "utf8").trim();
 const input = { script, topic: "잔반 줄이기 앱", audience: "1학년 학생", limitSeconds: 120 };
 
 const quotes = {
@@ -77,7 +78,7 @@ describe("buildReviewMessage", () => {
   const text = buildReviewMessage(input);
 
   it("wraps the script in script tags", () => {
-    expect(text).toContain(`<script>\n${script.trim()}\n</script>`);
+    expect(text).toContain(`<script>\n${script}\n</script>`);
   });
 
   it("passes the app-computed numbers", () => {
