@@ -8,6 +8,9 @@
   --accent-text: #ffffff;
   --danger: #b3261e;
   --danger-surface: #fdecea;
+  --warning: #c99400;
+  --warning-surface: #fff6d6;
+  --warning-text: #7a5a00;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +24,9 @@
     --accent-text: #0d1117;
     --danger: #f2b8b5;
     --danger-surface: #3a1a18;
+    --warning: #e0b84a;
+    --warning-surface: #3a3115;
+    --warning-text: #f0d68a;
   }
 
   html {
