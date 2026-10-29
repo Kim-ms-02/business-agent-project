@@ -91,6 +91,26 @@ describe("normalizeReview: broken responses", () => {
   });
 });
 
+describe("normalizeReview: summary length", () => {
+  it("keeps only the first 4 sentences of the summary", () => {
+    const raw = { ...fullRaw(), summary: "강점이에요. 먼저 고칠 점이에요. 마무리도 약해요. 잘하고 있어요. 다섯째 문장이에요." };
+    expect(normalizeReview(raw)!.summary).toBe("강점이에요. 먼저 고칠 점이에요. 마무리도 약해요. 잘하고 있어요.");
+  });
+
+  it("leaves a summary of 4 sentences or fewer as it is", () => {
+    const four = "강점이에요. 먼저 고칠 점이에요. 마무리도 약해요. 잘하고 있어요.";
+    expect(normalizeReview({ ...fullRaw(), summary: four })!.summary).toBe(four);
+    expect(normalizeReview({ ...fullRaw(), summary: "강점이에요. 잘하고 있어요." })!.summary).toBe(
+      "강점이에요. 잘하고 있어요.",
+    );
+  });
+
+  it("counts sentences on separate lines and joins them with spaces", () => {
+    const raw = { ...fullRaw(), summary: "하나예요.\n둘이에요.\n셋이에요.\n넷이에요.\n다섯이에요." };
+    expect(normalizeReview(raw)!.summary).toBe("하나예요. 둘이에요. 셋이에요. 넷이에요.");
+  });
+});
+
 describe("normalizeReview: counts", () => {
   it("cuts extra items from the front: 2 strengths and 3 improvements", () => {
     const raw = fullRaw();

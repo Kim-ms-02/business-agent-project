@@ -36,6 +36,13 @@ describe("loadSkill", () => {
     expect(skill).toContain(heading);
   });
 
+  it("builds the summary from strength, first fix, optional notice, and encouragement", () => {
+    expect(skill).toContain("총평은 최대 4문장");
+    for (const part of ["가장 큰 강점", "가장 먼저 고칠 점", "해당될 때만", "격려"]) {
+      expect(skill).toContain(part);
+    }
+  });
+
   it("evaluates the three answers at once and asks no follow-up questions in v0.1", () => {
     expect(skill).toContain("답변 3개를 한 번에 받아서 한 번에 평가한다");
     expect(skill).toContain("꼬리 질문은 내지 않는다");
