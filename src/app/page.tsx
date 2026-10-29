@@ -21,6 +21,7 @@ import {
   shouldAutoRetry,
 } from "@/lib/validate";
 import styles from "./page.module.css";
+import VoiceDebug from "./VoiceDebug";
 
 type Phase =
   | { name: "input"; error: string | null }
@@ -249,6 +250,8 @@ export default function Home() {
           onRestart={backToInput}
         />
       )}
+
+      {process.env.NODE_ENV === "development" && <VoiceDebug />}
     </main>
   );
 }

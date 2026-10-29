@@ -6,6 +6,8 @@
 node_modules/
 
 # 빌드 결과물
+# public/vad/는 npm run dev·build 때 node_modules에서 복사한다 (scripts/copy-vad-assets.mjs)
+/public/vad/
 .next/
 out/
 build/
