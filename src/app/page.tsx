@@ -3,12 +3,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   appendTranscript,
-  availabilityMessage,
-  checkDictation,
-  installDictation,
+  canDictate,
+  DICTATION_NOTICE,
+  NO_DICTATION_MESSAGE,
   speak,
   startListening,
-  type DictationStatus,
 } from "@/lib/speech";
 import type { CheckedReview, Question, ReviewResult } from "@/lib/types";
 import { answerLabel, inputError, isAnswered, practiceQuestions, shouldAutoRetry } from "@/lib/validate";
@@ -221,7 +220,7 @@ function PracticeQuestion({
   onNext: () => void;
   onRestart: () => void;
 }) {
-  const [dictation, setDictation] = useState<DictationStatus | "checking">("checking");
+  const [dictationReady] = useState(canDictate);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [speechError, setSpeechError] = useState<string | null>(null);
@@ -233,10 +232,6 @@ function PracticeQuestion({
   useEffect(() => {
     answerRef.current = answer;
   }, [answer]);
-
-  useEffect(() => {
-    void checkDictation().then(setDictation);
-  }, []);
 
   useEffect(() => {
     stopReadingRef.current = speak(question.question);
@@ -287,14 +282,7 @@ function PracticeQuestion({
     onNext();
   }
 
-  async function prepareDictation() {
-    setDictation("downloading");
-    const installed = await installDictation();
-    setDictation(installed ? await checkDictation() : "unavailable");
-  }
-
   const isLast = index + 1 === total;
-  const dictationNote = dictation === "checking" ? null : availabilityMessage(dictation);
 
   return (
     <section className={styles.card} aria-live="polite">
@@ -320,7 +308,7 @@ function PracticeQuestion({
       {listening && <p className={styles.muted}>듣는 중이에요{interim ? `: ${interim}` : ""}</p>}
 
       <div className={styles.actions}>
-        {dictation === "available" &&
+        {dictationReady &&
           (listening ? (
             <button className={styles.primary} type="button" onClick={stopAnswering}>
               그만 말하기
@@ -330,16 +318,11 @@ function PracticeQuestion({
               말로 답하기
             </button>
           ))}
-        {dictation === "downloadable" && (
-          <button className={styles.secondary} type="button" onClick={() => void prepareDictation()}>
-            한국어 받아쓰기 준비하기
-          </button>
-        )}
         <button className={styles.secondary} type="button" onClick={answerAgain} disabled={!answer && !listening}>
           다시 답하기
         </button>
       </div>
-      {dictationNote && <p className={styles.muted}>{dictationNote}</p>}
+      <p className={styles.muted}>{dictationReady ? DICTATION_NOTICE : NO_DICTATION_MESSAGE}</p>
       {speechError && (
         <p className={styles.alert} role="alert">
           {speechError}
