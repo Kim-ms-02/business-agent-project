@@ -48,3 +48,9 @@ export interface Shortage {
   found: number;
   expected: number;
 }
+
+export type CoachErrorKind = "no_key" | "auth" | "network" | "busy" | "invalid_response" | "refused" | "unknown";
+
+export type ReviewResult =
+  | { ok: true; review: CheckedReview; notices: string[]; estimatedSeconds: number }
+  | { ok: false; kind: CoachErrorKind | "bad_input"; message: string };

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { loadSkill } from "./skill";
-import { CRITERIA, QUESTION_TYPES, type CheckedReview } from "./types";
+import { CRITERIA, QUESTION_TYPES, type CoachErrorKind, type ReviewResult } from "./types";
 import {
   checkQuotes,
   chooseReview,
@@ -127,8 +127,6 @@ export function buildReviewMessage(input: ReviewInput): string {
 
 // ---------- Errors ----------
 
-export type CoachErrorKind = "no_key" | "auth" | "network" | "busy" | "invalid_response" | "refused" | "unknown";
-
 export const ERROR_MESSAGES: Record<CoachErrorKind, string> = {
   no_key: "API 키가 설정되지 않았어요. .env.local 파일에 키를 넣고 서버를 다시 켜 주세요.",
   auth: "API 키가 맞지 않아요. 키를 다시 확인해 주세요.",
@@ -163,10 +161,6 @@ export function createMessageWithClient(): CreateMessage {
 export function coachModel(): string {
   return process.env.COACH_MODEL?.trim() || DEFAULT_MODEL;
 }
-
-export type ReviewResult =
-  | { ok: true; review: CheckedReview; notices: string[]; estimatedSeconds: number }
-  | { ok: false; kind: CoachErrorKind; message: string };
 
 async function requestReview(input: ReviewInput, create: CreateMessage, model: string) {
   const response = await create({
