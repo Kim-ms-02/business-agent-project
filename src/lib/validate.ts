@@ -94,7 +94,10 @@ function toQuestion(raw: Raw): Question | null {
   const quote = text(raw.quote);
   const question = spoken(raw.question);
   const goodAnswer = screen(raw.goodAnswer);
-  return type && quote && question && goodAnswer ? { type, quote, question, goodAnswer } : null;
+  const avoidAnswer = screen(raw.avoidAnswer);
+  return type && quote && question && goodAnswer && avoidAnswer
+    ? { type, quote, question, goodAnswer, avoidAnswer }
+    : null;
 }
 
 function isPresent<T>(value: T | null): value is T {

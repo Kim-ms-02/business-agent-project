@@ -60,12 +60,13 @@ export const REVIEW_TOOL = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["type", "quote", "question", "goodAnswer"],
+          required: ["type", "quote", "question", "goodAnswer", "avoidAnswer"],
           properties: {
             type: { type: "string", enum: [...QUESTION_TYPES] },
             quote: { type: "string" },
             question: { type: "string" },
             goodAnswer: { type: "string" },
+            avoidAnswer: { type: "string" },
           },
         },
       },
