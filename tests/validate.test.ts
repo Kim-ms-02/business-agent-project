@@ -189,6 +189,47 @@ describe("normalizeReview: counts", () => {
   });
 });
 
+describe("try-this lead-in", () => {
+  // The screen already labels the field "이렇게 말해 보기", so the same words in front repeat it.
+  const withTry = (tryThis: string) => {
+    const raw = fullRaw();
+    raw.improvements[0] = { ...improvement(1), tryThis };
+    return normalizeReview(raw)!.improvements;
+  };
+
+  it.each([
+    "이렇게 말해 보세요. 저희는 2주 동안 시범 운영했습니다.",
+    "이렇게 말해 보세요: 저희는 2주 동안 시범 운영했습니다.",
+    "이렇게 말해 보기: 저희는 2주 동안 시범 운영했습니다.",
+    "  이렇게 말해 보세요 —  저희는 2주 동안 시범 운영했습니다.",
+  ])("removes the lead-in from an improvement (%s)", (tryThis) => {
+    expect(withTry(tryThis)[0].tryThis).toBe("저희는 2주 동안 시범 운영했습니다.");
+  });
+
+  it("keeps the words when they are part of the sentence itself", () => {
+    expect(withTry("첫 문장을 이렇게 말해 보세요.")[0].tryThis).toBe("첫 문장을 이렇게 말해 보세요.");
+  });
+
+  it("drops an improvement whose try-this is only the lead-in", () => {
+    expect(withTry("이렇게 말해 보세요.")).toHaveLength(2);
+  });
+
+  it("removes the lead-in from answer feedback before keeping one sentence", () => {
+    const found = normalizeAnswerFeedback({
+      evaluations: [
+        {
+          questionNumber: 1,
+          verdict: "보완 필요",
+          wentWell: "숫자를 댔어요.",
+          missing: "출처가 빠졌어요.",
+          tryThis: "이렇게 말해 보세요. 출처는 학과 설문입니다. 둘째 문장.",
+        },
+      ],
+    })!;
+    expect(found.get(1)?.tryThis).toBe("출처는 학과 설문입니다.");
+  });
+});
+
 describe("findShortages and shortageMessage", () => {
   it("reports nothing when every count is met", () => {
     expect(findShortages(normalizeReview(fullRaw())!)).toEqual([]);
