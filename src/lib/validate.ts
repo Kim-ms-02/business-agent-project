@@ -111,8 +111,11 @@ function oneQuestionPerType(questions: Question[]): Question[] {
 // The summary is strength, first fix, an optional notice, and encouragement.
 const MAX_SUMMARY_SENTENCES = 4;
 
-function limitSentences(value: string, max: number): string {
-  return splitSentences(value).slice(0, max).join(" ");
+// Extra sentences are dropped from the middle so the closing encouragement survives.
+function limitSummary(value: string): string {
+  const sentences = splitSentences(value);
+  if (sentences.length <= MAX_SUMMARY_SENTENCES) return sentences.join(" ");
+  return [...sentences.slice(0, MAX_SUMMARY_SENTENCES - 1), sentences[sentences.length - 1]].join(" ");
 }
 
 /**
@@ -125,7 +128,7 @@ export function normalizeReview(raw: unknown): Review | null {
   if (summary === null) return null;
 
   return {
-    summary: limitSentences(summary, MAX_SUMMARY_SENTENCES),
+    summary: limitSummary(summary),
     strengths: list(raw.strengths).map(toStrength).filter(isPresent).slice(0, REQUIRED_COUNTS.strengths),
     improvements: list(raw.improvements)
       .map(toImprovement)
