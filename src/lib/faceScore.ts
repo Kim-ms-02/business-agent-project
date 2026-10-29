@@ -1,5 +1,6 @@
 import type { Band } from "./deliveryConfig";
 import {
+  BASELINE_MIN_RATIO,
   EXPRESSION_BANDS,
   EXPRESSION_LOWEST_SCORE,
   FACE_SAMPLE_SECONDS,
@@ -40,6 +41,12 @@ export interface FaceFrame {
   faceWidth: number;
 }
 
+/** Average head angle while looking at the screen before the rehearsal. */
+export interface FaceBaseline {
+  yaw: number;
+  pitch: number;
+}
+
 export interface FaceItemScore {
   score: number;
   value: number;
@@ -63,6 +70,7 @@ export type FaceResult =
     };
 
 export const FACE_NOT_ENOUGH_MESSAGE = "측정이 부족해요";
+export const BASELINE_FAILED_MESSAGE = "얼굴을 찾지 못했어요. 얼굴이 화면 가운데 보이게 한 뒤 다시 재 주세요";
 
 // Ratios built from many floats drift (0.7 can come out as 0.6999…), so values are rounded before
 // they are compared with the bands.
@@ -84,10 +92,28 @@ function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function isLookingAtScreen(frame: FaceFrame): boolean {
+function mean(values: number[]): number {
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+/** The reference pose from the frames recorded while the speaker looked at the screen. */
+export function measureBaseline(
+  frames: FaceFrame[],
+): { ok: true; baseline: FaceBaseline } | { ok: false; message: string } {
+  const found = frames.filter((f) => f.detected);
+  if (found.length === 0 || ratio(frames, (f) => f.detected) < BASELINE_MIN_RATIO) {
+    return { ok: false, message: BASELINE_FAILED_MESSAGE };
+  }
+  return {
+    ok: true,
+    baseline: { yaw: round(mean(found.map((f) => f.yaw))), pitch: round(mean(found.map((f) => f.pitch))) },
+  };
+}
+
+export function isLookingAtScreen(frame: FaceFrame, baseline: FaceBaseline): boolean {
   return (
-    Math.abs(frame.yaw) < LOOK_MAX_YAW &&
-    Math.abs(frame.pitch) < LOOK_MAX_PITCH &&
+    round(Math.abs(frame.yaw - baseline.yaw)) < LOOK_MAX_YAW &&
+    round(Math.abs(frame.pitch - baseline.pitch)) < LOOK_MAX_PITCH &&
     frame.lookDown < LOOK_MAX_EYE_DOWN &&
     frame.lookAway < LOOK_MAX_EYE_AWAY
   );
@@ -110,8 +136,8 @@ function windows(frames: FaceFrame[], seconds: number): Map<number, FaceFrame[]>
 }
 
 function standardDeviation(values: number[]): number {
-  const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
-  return Math.sqrt(values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length);
+  const average = mean(values);
+  return Math.sqrt(values.reduce((sum, v) => sum + (v - average) ** 2, 0) / values.length);
 }
 
 /** Average spread of the left-right head angle within each second. */
@@ -123,14 +149,15 @@ export function headMovement(frames: FaceFrame[]): number {
 }
 
 /** 10-second stretches where the speaker looked at the screen in less than half of the measured frames. */
-export function lowGazeWindows(frames: FaceFrame[], endsAt: number): TimeWindow[] {
+export function lowGazeWindows(frames: FaceFrame[], baseline: FaceBaseline, endsAt: number): TimeWindow[] {
   return [...windows(frames, LOW_GAZE_WINDOW_SECONDS).entries()]
-    .filter(([, group]) => ratio(group, isLookingAtScreen) < LOW_GAZE_RATIO)
+    .filter(([, group]) => ratio(group, (f) => isLookingAtScreen(f, baseline)) < LOW_GAZE_RATIO)
     .map(([start]) => ({ start: round(start), end: round(Math.min(start + LOW_GAZE_WINDOW_SECONDS, endsAt)) }))
     .sort((a, b) => a.start - b.start);
 }
 
-export function scoreFace(frames: FaceFrame[]): FaceResult {
+/** `frames` are the rehearsal itself; the seconds used to measure the baseline are not included. */
+export function scoreFace(frames: FaceFrame[], baseline: FaceBaseline): FaceResult {
   const found = frames.filter((f) => f.detected);
   const measuredRatio = ratio(frames, (f) => f.detected);
   const undetectedSeconds = round((frames.length - found.length) * FACE_SAMPLE_SECONDS);
@@ -138,7 +165,7 @@ export function scoreFace(frames: FaceFrame[]): FaceResult {
     return { measured: false, measuredRatio, undetectedSeconds, message: FACE_NOT_ENOUGH_MESSAGE };
   }
 
-  const gazeRatio = ratio(found, isLookingAtScreen);
+  const gazeRatio = ratio(found, (f) => isLookingAtScreen(f, baseline));
   const gaze: FaceItemScore = {
     score: bandScore(gazeRatio, GAZE_BANDS, GAZE_LOWEST_SCORE),
     value: gazeRatio,
@@ -175,7 +202,7 @@ export function scoreFace(frames: FaceFrame[]): FaceResult {
     measuredRatio,
     undetectedSeconds,
     items,
-    lowGazeWindows: lowGazeWindows(found, endsAt),
+    lowGazeWindows: lowGazeWindows(found, baseline, endsAt),
     total: Math.round((sum / (Object.keys(items).length * MAX_FACE_ITEM_SCORE)) * 100),
   };
 }

@@ -16,7 +16,13 @@ export const FACE_SAMPLE_SECONDS = 0.1;
 // With the face found in less than half the frames, the numbers say more about the camera than the speaker.
 export const MIN_MEASURED_RATIO = 0.5;
 
-// Looking at the screen: head roughly facing the camera and eyes not lowered or turned aside.
+// Before the rehearsal the speaker looks at the screen for this long to set the reference pose.
+// A laptop camera sits above the screen, so looking at the screen can read as a lowered head.
+// If the face was found in less than this share of those frames, the speaker is asked to measure again.
+export const BASELINE_SECONDS = 3;
+export const BASELINE_MIN_RATIO = 0.5;
+
+// Looking at the screen: head within these angles of the reference pose and eyes not lowered or turned aside.
 // 15 degrees allows small natural turns; eye values run 0–1, and 0.5 is a clear look away.
 export const LOOK_MAX_YAW = 15;
 export const LOOK_MAX_PITCH = 15;
