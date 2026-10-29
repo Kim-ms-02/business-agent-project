@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { startVoiceTracker, type LiveVoice, type VoiceTracker } from "@/lib/voiceTracker";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { micUsage, startVoiceTracker, type LiveVoice, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./VoiceDebug.module.css";
 
 // Development-only panel for checking the microphone and vad-web before rehearsal mode exists.
 // Shows whether speech is detected right now and the current volume; nothing is recorded.
+
+const OWNER = "debug";
 
 type State =
   | { name: "off"; summary: string | null }
@@ -16,12 +18,18 @@ type State =
 export default function VoiceDebug() {
   const [state, setState] = useState<State>({ name: "off", summary: null });
   const tracker = useRef<VoiceTracker | null>(null);
+  // While a rehearsal has the microphone, this panel stays off.
+  const busy = useSyncExternalStore(
+    micUsage.subscribe,
+    () => micUsage.busyFor(OWNER),
+    () => false,
+  );
 
   useEffect(() => () => void tracker.current?.stop(), []);
 
   async function start() {
     setState({ name: "starting" });
-    const result = await startVoiceTracker((live) => setState({ name: "on", live }));
+    const result = await startVoiceTracker(OWNER, (live) => setState({ name: "on", live }));
     if (!result.ok) {
       setState({ name: "failed", message: result.message });
       return;
@@ -69,7 +77,13 @@ export default function VoiceDebug() {
         <>
           {state.name === "failed" && <p className={styles.error}>{state.message}</p>}
           {state.name === "off" && state.summary && <p className={styles.note}>{state.summary}</p>}
-          <button type="button" className={styles.button} onClick={start} disabled={state.name === "starting"}>
+          {busy && <p className={styles.note}>리허설 중에는 켤 수 없어요.</p>}
+          <button
+            type="button"
+            className={styles.button}
+            onClick={start}
+            disabled={busy || state.name === "starting"}
+          >
             {state.name === "starting" ? "켜는 중…" : "마이크 켜기"}
           </button>
         </>

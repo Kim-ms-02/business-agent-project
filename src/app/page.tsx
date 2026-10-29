@@ -566,7 +566,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   async function start() {
     setStep({ name: "starting" });
     setSpeaking(false);
-    const result = await startVoiceTracker((live) => setSpeaking(live.speaking));
+    const result = await startVoiceTracker("rehearsal", (live) => setSpeaking(live.speaking));
     if (!result.ok) {
       setStep({ name: "ready", error: result.message });
       return;
