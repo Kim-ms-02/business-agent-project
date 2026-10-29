@@ -233,6 +233,18 @@ export const ERROR_MESSAGES: Record<CoachErrorKind, string> = {
   unknown: "알 수 없는 문제가 생겼어요. 다시 시도해 주세요.",
 };
 
+// HTTP status for each failure, shared by the review and answer routes.
+export const ERROR_STATUS: Record<CoachErrorKind | "bad_input", number> = {
+  bad_input: 400,
+  no_key: 500,
+  auth: 502,
+  network: 502,
+  busy: 503,
+  invalid_response: 502,
+  refused: 422,
+  unknown: 500,
+};
+
 export class InvalidResponseError extends Error {}
 class RefusedError extends Error {}
 
