@@ -11,7 +11,7 @@ import {
   type DictationStatus,
 } from "@/lib/speech";
 import type { CheckedReview, Question, ReviewResult } from "@/lib/types";
-import { answerLabel, isAnswered, practiceQuestions, shouldAutoRetry } from "@/lib/validate";
+import { answerLabel, inputError, isAnswered, practiceQuestions, shouldAutoRetry } from "@/lib/validate";
 import styles from "./page.module.css";
 
 type Phase =
@@ -39,12 +39,14 @@ export default function Home() {
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
 
+  const limitSeconds = Math.round(Number(limitMinutes) * 60);
+
   async function requestReview(): Promise<ReviewResult> {
     try {
       const response = await fetch("/api/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, topic, audience, limitSeconds: Math.round(Number(limitMinutes) * 60) }),
+        body: JSON.stringify({ script, topic, audience, limitSeconds }),
       });
       return (await response.json()) as ReviewResult;
     } catch {
@@ -73,7 +75,10 @@ export default function Home() {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    void prepare();
+    // The browser's own bubbles are off (noValidate), so the app shows its message instead.
+    const error = inputError(script, limitSeconds);
+    if (error !== null) setPhase({ name: "input", error });
+    else void prepare();
   }
 
   function backToInput() {
@@ -101,10 +106,10 @@ export default function Home() {
       </header>
 
       {phase.name === "input" && (
-        <form className={styles.form} onSubmit={handleSubmit}>
+        <form className={styles.form} onSubmit={handleSubmit} noValidate>
           <label className={styles.field}>
             발표 대본
-            <textarea value={script} onChange={(e) => setScript(e.target.value)} required />
+            <textarea value={script} onChange={(e) => setScript(e.target.value)} />
           </label>
           <div className={styles.row}>
             <label className={styles.field}>
@@ -125,7 +130,6 @@ export default function Home() {
               step={0.5}
               value={limitMinutes}
               onChange={(e) => setLimitMinutes(e.target.value)}
-              required
             />
           </label>
           {phase.error && (
