@@ -13,6 +13,9 @@ dist/
 *.tsbuildinfo
 next-env.d.ts
 
+# next dev가 자동으로 만드는 코딩 도구 안내 (안내는 CLAUDE.md 한 곳에만 둔다)
+AGENTS.md
+
 # 테스트·도구 결과물
 coverage/
 .vercel/
