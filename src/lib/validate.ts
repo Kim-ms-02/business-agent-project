@@ -260,6 +260,20 @@ export function missingAnswerMessage(count: number): string {
   return `답변 평가를 ${count}개 받지 못했어요`;
 }
 
+export function evaluationLabel(evaluation: AnswerEvaluation): string {
+  if (evaluation.status === "evaluated") return evaluation.feedback.verdict;
+  return evaluation.status === "skipped" ? answerLabel("") : "평가를 받지 못했어요";
+}
+
+/** The three feedback sentences in the order the skill file writes them, with screen labels. */
+export function feedbackLines(feedback: AnswerFeedback): { label: string; text: string }[] {
+  return [
+    { label: "좋았던 점", text: feedback.wentWell },
+    { label: feedback.verdict === "좋음" ? "더 좋게 할 점" : "빠진 점", text: feedback.missing },
+    { label: "이렇게 말해 보기", text: feedback.tryThis },
+  ];
+}
+
 // ---------- Quote check ----------
 
 // Quotes shorter than this (after removing spaces and punctuation) match too easily to count as evidence.
