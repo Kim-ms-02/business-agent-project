@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { estimatePosition, scriptSentences } from "@/lib/scriptPosition";
+import {
+  alignTranscript,
+  estimatePosition,
+  findDropouts,
+  normalizeForMatch,
+  scriptSentences,
+  toSpokenKorean,
+} from "@/lib/scriptPosition";
 import { countSyllables } from "@/lib/validate";
 
 // A sentence of exactly n syllables, so the arithmetic stays readable.
@@ -141,5 +148,245 @@ describe("estimatePosition", () => {
   it("cannot say anything for a script without syllables", () => {
     expect(estimatePosition(5, [{ start: 0, end: 10 }], scriptSentences(""))).toBeNull();
     expect(estimatePosition(5, [{ start: 0, end: 10 }], scriptSentences("... !!!"))).toBeNull();
+  });
+});
+
+describe("toSpokenKorean", () => {
+  it.each([
+    ["0", "영"],
+    ["7", "칠"],
+    ["10", "십"],
+    ["11", "십일"],
+    ["87", "팔십칠"],
+    ["100", "백"],
+    ["105", "백오"],
+    ["1000", "천"],
+    ["2025", "이천이십오"],
+    ["3005", "삼천오"],
+    ["10000", "만"],
+    ["120000", "십이만"],
+    ["100000000", "일억"],
+    ["120000000", "일억이천만"],
+  ])("reads the number %s as %s", (number, spoken) => {
+    expect(toSpokenKorean(number)).toBe(spoken);
+  });
+
+  it("reads numbers inside a sentence and keeps the rest", () => {
+    expect(toSpokenKorean("학생 87명에게")).toBe("학생 팔십칠명에게");
+  });
+
+  it("reads percents and decimal points", () => {
+    expect(toSpokenKorean("71%")).toBe("칠십일 퍼센트");
+    expect(toSpokenKorean("71 %가")).toBe("칠십일 퍼센트가");
+    expect(toSpokenKorean("3.4배")).toBe("삼 점 사배");
+    expect(toSpokenKorean("0.5")).toBe("영 점 오");
+    expect(toSpokenKorean("3.14")).toBe("삼 점 일사");
+  });
+
+  it("ignores thousands commas", () => {
+    expect(toSpokenKorean("120,000명")).toBe("십이만명");
+    expect(toSpokenKorean("1,500원")).toBe("천오백원");
+  });
+
+  it("reads numbers mixed with Korean units", () => {
+    expect(toSpokenKorean("2만 8천 원")).toBe("이만 팔천 원");
+    expect(toSpokenKorean("1만 명")).toBe("만 명");
+    expect(toSpokenKorean("1천 개")).toBe("천 개");
+    expect(toSpokenKorean("3억")).toBe("삼억");
+  });
+
+  it("reads all-capital words of up to four letters by letter name", () => {
+    expect(toSpokenKorean("AI가")).toBe("에이아이가");
+    expect(toSpokenKorean("KTX를 타고")).toBe("케이티엑스를 타고");
+    expect(toSpokenKorean("A안과 B안")).toBe("에이안과 비안");
+  });
+
+  it("leaves English said as a word as it is", () => {
+    expect(toSpokenKorean("Google 검색")).toBe("Google 검색");
+    expect(toSpokenKorean("iPhone")).toBe("iPhone");
+    expect(toSpokenKorean("UNESCO")).toBe("UNESCO");
+  });
+});
+
+describe("normalizeForMatch", () => {
+  it("keeps only letters, so spacing and punctuation do not matter", () => {
+    expect(normalizeForMatch("안녕하세요, 저는 김민지 입니다!")).toBe("안녕하세요저는김민지입니다");
+  });
+
+  it("reads numbers and capital abbreviations the same way on both sides", () => {
+    expect(normalizeForMatch("학생 87명")).toBe(normalizeForMatch("학생 팔십칠 명"));
+    expect(normalizeForMatch("AI가")).toBe(normalizeForMatch("에이아이가"));
+  });
+
+  it("drops hesitation sounds said on their own, but not words that contain them", () => {
+    expect(normalizeForMatch("음 그 결과 어 음식물")).toBe("그결과음식물");
+    expect(normalizeForMatch("으음, 어어 좋아요")).toBe("좋아요");
+  });
+
+  it("keeps English words in lower case", () => {
+    expect(normalizeForMatch("Google 검색")).toBe("google검색");
+  });
+});
+
+describe("findDropouts", () => {
+  it("finds a stretch where the speaker kept talking but dictation sent nothing for more than 5 seconds", () => {
+    expect(findDropouts([1, 2, 3, 15], [{ start: 0, end: 20 }], 20)).toEqual([{ start: 3, end: 15 }]);
+  });
+
+  it("does not count silence, only speaking time, inside the stretch", () => {
+    const segments = [
+      { start: 0, end: 3 },
+      { start: 9, end: 12 },
+    ];
+    expect(findDropouts([2, 12], segments, 12)).toEqual([]);
+  });
+
+  it("needs more than exactly 5 seconds of speech", () => {
+    expect(findDropouts([0, 10], [{ start: 0, end: 5 }], 10)).toEqual([]);
+  });
+
+  it("finds dropouts at the start and at the end", () => {
+    expect(findDropouts([], [{ start: 0, end: 8 }], 8)).toEqual([{ start: 0, end: 8 }]);
+    expect(findDropouts([1], [{ start: 0, end: 10 }], 10)).toEqual([{ start: 1, end: 10 }]);
+  });
+});
+
+describe("alignTranscript", () => {
+  const LINES = [
+    "안녕하세요, 저는 김민지입니다.",
+    "오늘은 잔반 줄이기 앱을 소개하겠습니다.",
+    "학생 87명에게 설문을 했습니다.",
+    "AI가 먹을 양을 미리 알려 줍니다.",
+    "그 결과 음식물 쓰레기가 많이 줄었습니다.",
+    "감사합니다.",
+  ];
+  const table = scriptSentences(LINES.join(" "));
+  const chunks = (...texts: string[]) => texts.map((text, i) => ({ text, at: i * 5 + 4 }));
+  const all = (status: string) => LINES.map(() => status);
+
+  it("matches a script read as it is", () => {
+    const result = alignTranscript(table, chunks(...LINES), []);
+    expect(result.sentences).toEqual(all("read"));
+    expect(result.matches.map((m) => [m.chunk, m.first, m.last])).toEqual(LINES.map((_, i) => [i, i, i]));
+  });
+
+  it("ignores different spacing and missing sentence ends", () => {
+    const heard = chunks(
+      "안녕하세요저는 김민지 입니다",
+      "오늘은 잔반줄이기 앱을 소개하겠습니다",
+      ...LINES.slice(2, 5),
+      "감사 합니다",
+    );
+    expect(alignTranscript(table, heard, []).sentences).toEqual(all("read"));
+  });
+
+  it("matches numbers dictated as Korean words, and as digits", () => {
+    const words = chunks(...LINES.slice(0, 2), "학생 팔십칠 명에게 설문을 했습니다", ...LINES.slice(3));
+    const digits = chunks(...LINES.slice(0, 2), "학생 87명에게 설문을 했습니다", ...LINES.slice(3));
+    expect(alignTranscript(table, words, []).sentences).toEqual(all("read"));
+    expect(alignTranscript(table, digits, []).sentences).toEqual(all("read"));
+  });
+
+  it("matches English abbreviations dictated in Korean", () => {
+    const heard = chunks(...LINES.slice(0, 3), "에이아이가 먹을 양을 미리 알려 줍니다", ...LINES.slice(4));
+    expect(alignTranscript(table, heard, []).sentences).toEqual(all("read"));
+  });
+
+  it("matches a sentence with hesitation sounds in it", () => {
+    const heard = chunks(...LINES.slice(0, 4), "음 그 결과 어 음식물 쓰레기가 으음 많이 줄었습니다", "감사합니다");
+    expect(alignTranscript(table, heard, []).sentences).toEqual(all("read"));
+  });
+
+  it("matches one dictation result that covers two sentences", () => {
+    const heard = chunks("안녕하세요 저는 김민지입니다 오늘은 잔반 줄이기 앱을 소개하겠습니다", ...LINES.slice(2));
+    const result = alignTranscript(table, heard, []);
+    expect(result.sentences).toEqual(all("read"));
+    expect(result.matches[0]).toMatchObject({ chunk: 0, first: 0, last: 1 });
+  });
+
+  it("puts together one sentence dictated in two pieces", () => {
+    const heard = chunks(...LINES.slice(0, 2), "학생 팔십칠 명에게", "설문을 했습니다", ...LINES.slice(3));
+    expect(alignTranscript(table, heard, []).sentences).toEqual(all("read"));
+  });
+
+  it("does not count a sentence when less than half of it was matched", () => {
+    const heard = chunks(LINES[0], "오늘은 잔반", ...LINES.slice(2));
+    expect(alignTranscript(table, heard, []).sentences[1]).toBe("missed");
+  });
+
+  it("leaves a skipped sentence unread", () => {
+    const heard = chunks(...LINES.slice(0, 2), ...LINES.slice(3));
+    expect(alignTranscript(table, heard, []).sentences).toEqual(["read", "read", "missed", "read", "read", "read"]);
+  });
+
+  it("follows the speaker back to an earlier sentence read again", () => {
+    const heard = chunks(LINES[0], LINES[1], LINES[2], LINES[1], LINES[2], ...LINES.slice(3));
+    const result = alignTranscript(table, heard, []);
+    expect(result.sentences).toEqual(all("read"));
+    expect(result.matches[3]).toMatchObject({ first: 1, last: 1 });
+  });
+
+  it("does not move for improvised words that are not in the script", () => {
+    const heard = chunks(LINES[0], "제가 어제 점심을 먹다가 생각한 건데요", ...LINES.slice(1));
+    const result = alignTranscript(table, heard, []);
+    expect(result.sentences).toEqual(all("read"));
+    expect(result.matches.map((m) => m.chunk)).not.toContain(1);
+  });
+
+  it("does not let a very short piece jump ahead", () => {
+    // "감사" alone would match the last sentence and leave the rest out of reach.
+    const heard = chunks(LINES[0], "감사", ...LINES.slice(1));
+    expect(alignTranscript(table, heard, []).sentences).toEqual(all("read"));
+  });
+
+  it("matches with at least 60% of the letters right, and not below", () => {
+    const short = scriptSentences("가나다라마바사아자차. 카타파하거너더러머버.");
+    // Ten letters: four wrong is 60% right, five wrong is 50%.
+    expect(alignTranscript(short, [{ text: "가나다라마흏흏흏흏차", at: 3 }], []).sentences[0]).toBe("read");
+    expect(alignTranscript(short, [{ text: "가나다라흏흏흏흏흏차", at: 3 }], []).sentences[0]).toBe("missed");
+  });
+
+  it("marks sentences said while dictation had stopped as unknown, not unread", () => {
+    const heard = [
+      { text: LINES[0], at: 3 },
+      { text: LINES[1], at: 8 },
+      { text: LINES[4], at: 25 },
+    ];
+    expect(alignTranscript(table, heard, [{ start: 10, end: 20 }]).sentences).toEqual([
+      "read",
+      "read",
+      "unknown",
+      "unknown",
+      "read",
+      "missed",
+    ]);
+    expect(alignTranscript(table, heard, []).sentences).toEqual(["read", "read", "missed", "missed", "read", "missed"]);
+  });
+
+  it("marks the rest as unknown when dictation stopped before the end", () => {
+    const heard = [
+      { text: LINES[0], at: 3 },
+      { text: LINES[1], at: 8 },
+      { text: LINES[2], at: 13 },
+    ];
+    expect(alignTranscript(table, heard, [{ start: 14, end: 40 }]).sentences).toEqual([
+      "read",
+      "read",
+      "read",
+      "unknown",
+      "unknown",
+      "unknown",
+    ]);
+  });
+
+  it("marks the start as unknown when dictation began late", () => {
+    const heard = [{ text: LINES[2], at: 20 }, ...LINES.slice(3).map((text, i) => ({ text, at: 25 + i * 5 }))];
+    const result = alignTranscript(table, heard, [{ start: 0, end: 18 }]);
+    expect(result.sentences.slice(0, 2)).toEqual(["unknown", "unknown"]);
+  });
+
+  it("gives stage directions their own status, so they are never unread", () => {
+    const withNote = scriptSentences(`${LINES[0]}\n(웃음)\n${LINES[1]}`);
+    expect(alignTranscript(withNote, chunks(LINES[0], LINES[1]), []).sentences).toEqual(["read", "blank", "read"]);
   });
 });
