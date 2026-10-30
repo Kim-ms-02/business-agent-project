@@ -29,3 +29,22 @@ export const READ_MIN_COVERAGE = 0.5;
 // While the speaker talks, dictation normally sends something every few seconds. More than this many
 // seconds of speech with nothing back means dictation stopped; sentences said then are unknown, not skipped.
 export const DICTATION_GAP_SECONDS = 5;
+
+// ---------- Sentence marks ----------
+
+// A sentence is judged for low gaze only when at least this many frames with a face fall inside it
+// (about one second at ten measurements a second). Fewer frames swing too much on a single glance.
+// The low-gaze share itself is the same as the 10-second stretches on the face result (LOW_GAZE_RATIO).
+export const SENTENCE_GAZE_MIN_FRAMES = 10;
+
+// A sentence is fast when its pace is at least this many times the whole rehearsal's pace...
+export const FAST_PACE_RATIO = 1.2;
+// ...and over the top of the 4-point speed band, so a slow speaker's normal sentence is not called fast.
+export const FAST_PACE_MIN = 330;
+// Sentences spoken for less than this many seconds are not judged: a second's difference in dictation
+// timing would change their pace by half.
+export const FAST_MIN_SPOKEN_SECONDS = 2;
+
+// Filler words counted from dictation, only when a whole word is exactly one of these. "그" is also an
+// ordinary word ("그 결과"), so the count is shown as low accuracy and never scored.
+export const FILLER_WORDS = ["음", "어", "그", "그니까", "약간"];
