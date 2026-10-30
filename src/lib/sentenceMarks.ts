@@ -18,7 +18,8 @@ import {
 // segments, and optionally the face frames. Labels for the screen are made elsewhere.
 
 export type SentenceMark =
-  | { kind: "pause"; seconds: number }
+  /** Every pause over three seconds before speech started again in this sentence, in order. */
+  | { kind: "pause"; seconds: number[] }
   | { kind: "lowGaze" }
   | { kind: "fast"; pace: number }
   | { kind: "skipped" }
@@ -82,7 +83,8 @@ function fastPace(sentence: ScriptSentence, spans: TimeWindow[], overallPace: nu
 }
 
 /**
- * Marks for each sentence: pauses over three seconds before the sentence where speech started again,
+ * Marks for each sentence: pauses over three seconds before the sentence where speech started again
+ * (several in one sentence make one mark),
  * low gaze (camera on), and with dictation on, fast, skipped (missed between read sentences), and
  * unread (missed after the last read sentence).
  */
@@ -91,10 +93,14 @@ export function markSentences(input: MarkInput): SentenceMark[][] {
   const marks: SentenceMark[][] = sentences.map(() => []);
 
   const ordered = [...input.segments].sort((a, b) => a.start - b.start);
+  const pauses: number[][] = sentences.map(() => []);
   for (const silence of findSilences(ordered)) {
     const index = sentenceAt(timeline, silence.end);
-    if (index !== -1) marks[index].push({ kind: "pause", seconds: Math.round((silence.end - silence.start) * 10) / 10 });
+    if (index !== -1) pauses[index].push(Math.round((silence.end - silence.start) * 10) / 10);
   }
+  pauses.forEach((seconds, i) => {
+    if (seconds.length > 0) marks[i].push({ kind: "pause", seconds });
+  });
 
   const lastRead = readings ? readings.lastIndexOf("read") : -1;
   sentences.forEach((sentence, i) => {

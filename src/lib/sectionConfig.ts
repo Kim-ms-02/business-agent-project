@@ -41,9 +41,12 @@ export const SENTENCE_GAZE_MIN_FRAMES = 10;
 export const FAST_PACE_RATIO = 1.2;
 // ...and over the top of the 4-point speed band, so a slow speaker's normal sentence is not called fast.
 export const FAST_PACE_MIN = 330;
-// Sentences spoken for less than this many seconds are not judged: a second's difference in dictation
-// timing would change their pace by half.
-export const FAST_MIN_SPOKEN_SECONDS = 2;
+// Sentences spoken for less than this many seconds are not judged. Dictation results can arrive 1–2 s
+// early or late, which moves that much speaking time between neighbouring sentences: for a 2-second
+// sentence that is a 50–100% error in pace, far more than the 1.2× being looked for. At 5 seconds
+// (about 25 syllables, a longish sentence) the error is 20–40%. Fewer sentences are judged, but a
+// wrong "빠름" pointing at the wrong sentence is worse than one that is not shown.
+export const FAST_MIN_SPOKEN_SECONDS = 5;
 
 // Filler words counted from dictation, only when a whole word is exactly one of these. "그" is also an
 // ordinary word ("그 결과"), so the count is shown as low accuracy and never scored.
