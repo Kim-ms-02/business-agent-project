@@ -194,7 +194,7 @@ describe("normalizeDeliveryFeedback", () => {
 
 describe("missingDeliveryMessage", () => {
   it("says how many items have no feedback", () => {
-    expect(missingDeliveryMessage(2)).toBe("말투 피드백을 2개 항목에서 받지 못했어요");
+    expect(missingDeliveryMessage(2)).toBe("코치 피드백을 2개 항목에서 받지 못했어요");
   });
 });
 
@@ -227,7 +227,7 @@ describe("coachDelivery", () => {
     const create = vi.fn<CreateMessage>().mockResolvedValue(toolReply(allItems.slice(0, 3)));
     const result = await coachDelivery(input, create, "m");
     expect(create).toHaveBeenCalledTimes(2);
-    expect(result.ok && result.notices).toEqual(["말투 피드백을 1개 항목에서 받지 못했어요"]);
+    expect(result.ok && result.notices).toEqual(["코치 피드백을 1개 항목에서 받지 못했어요"]);
   });
 
   it("keeps the first feedback when the retry call fails", async () => {
