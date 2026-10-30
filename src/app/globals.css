@@ -1,32 +1,36 @@
+/* Colors and contrast values are recorded in docs/design-notes.md. */
 :root {
-  --background: #ffffff;
-  --foreground: #1a1a1a;
-  --muted: #5f6368;
-  --border: #d0d4d9;
-  --surface: #f5f6f8;
-  --accent: #2457c5;
+  --background: #f2f4f3;
+  --sheet: #ffffff;
+  --foreground: #1e2b2f;
+  --muted: #55636a;
+  --border: #c9d1ce;
+  --surface: var(--sheet);
+  --accent: #2c5f55;
   --accent-text: #ffffff;
-  --danger: #b3261e;
-  --danger-surface: #fdecea;
-  --warning: #c99400;
-  --warning-surface: #fff6d6;
-  --warning-text: #7a5a00;
+  --focus-surface: #e2ede8;
+  --danger: #a3291f;
+  --danger-surface: #fbeae7;
+  --warning: #b88a00;
+  --warning-surface: #fff3cc;
+  --warning-text: #6e5200;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #121212;
-    --foreground: #ececec;
-    --muted: #a5a9ad;
-    --border: #3a3d41;
-    --surface: #1d1f22;
-    --accent: #7aa2f7;
-    --accent-text: #0d1117;
-    --danger: #f2b8b5;
-    --danger-surface: #3a1a18;
-    --warning: #e0b84a;
-    --warning-surface: #3a3115;
-    --warning-text: #f0d68a;
+    --background: #141a1b;
+    --sheet: #1c2325;
+    --foreground: #e4ebe9;
+    --muted: #a2b0b3;
+    --border: #36423f;
+    --accent: #8cc7b6;
+    --accent-text: #0f211c;
+    --focus-surface: #1f3530;
+    --danger: #f2b3ab;
+    --danger-surface: #3a1c19;
+    --warning: #d8ae3a;
+    --warning-surface: #362c12;
+    --warning-text: #f0d47e;
   }
 
   html {
@@ -44,8 +48,12 @@ body {
   min-height: 100vh;
   color: var(--foreground);
   background: var(--background);
-  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  line-height: 1.6;
+  font-family:
+    "Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-size: 1rem;
+  line-height: 1.7;
+  word-break: keep-all;
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -54,4 +62,9 @@ input,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
