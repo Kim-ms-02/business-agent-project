@@ -359,3 +359,15 @@
   border: 2px solid var(--accent);
   border-radius: 10px;
 }
+
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkRow input {
+  margin-top: 0.35em;
+  flex-shrink: 0;
+}

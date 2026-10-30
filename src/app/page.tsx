@@ -29,6 +29,11 @@ import {
 import {
   basisLabel,
   DICTATION_FELL_BACK_NOTE,
+  DICTATION_ON_NOTICE,
+  DICTATION_OPTION_LABEL,
+  dictationOptionShown,
+  needsReadToEnd,
+  type DictationRecord,
   FILLER_ACCURACY_NOTE,
   finishRehearsal,
   NO_DICTATION_PACE_NOTE,
@@ -37,6 +42,7 @@ import {
   type RehearsalInput,
   type RehearsalOutcome,
 } from "@/lib/rehearsalResult";
+import { DICTATION_GAP_SECONDS } from "@/lib/sectionConfig";
 import { markLabel } from "@/lib/sentenceMarks";
 import {
   appendTranscript,
@@ -607,6 +613,22 @@ type CoachState =
   | { name: "failed"; message: string }
   | { name: "done"; feedback: DeliveryFeedback; notices: string[] };
 
+// Rehearsal dictation (v0.4, only when the speaker turns it on). The dictated text stays in this
+// browser tab: it is used to place sentences and count speed, and is dropped with the result.
+interface DictationSession {
+  record: DictationRecord;
+  /** performance.now() when the rehearsal clock started. */
+  startedAt: number;
+  lastHeard: number;
+  active: boolean;
+  stopCurrent: (() => void) | null;
+  watchdog: ReturnType<typeof setInterval> | null;
+  ended: (() => void) | null;
+}
+
+// After "끝", dictation may still send the last piece; wait this long at most.
+const DICTATION_FLUSH_MS = 2000;
+
 async function requestDeliveryFeedback(summary: DeliverySummary): Promise<DeliveryFeedbackResult> {
   try {
     const response = await fetch("/api/delivery", {
@@ -627,6 +649,14 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   const [coach, setCoach] = useState<CoachState>({ name: "none" });
   const [camera, setCamera] = useState<CameraState>({ name: "off" });
   const [faceSeen, setFaceSeen] = useState(true);
+  // The option is only offered in Chrome and Edge. This screen is only shown in the browser.
+  const [dictationAvailable] = useState(
+    () => typeof navigator !== "undefined" && dictationOptionShown(navigator.userAgent, canDictate()),
+  );
+  const [dictationOn, setDictationOn] = useState(false);
+  const [dictationError, setDictationError] = useState<string | null>(null);
+  const dictation = useRef<DictationSession | null>(null);
+  const speakingNow = useRef(false);
   const tracker = useRef<VoiceTracker | null>(null);
   const faceTracker = useRef<FaceTracker | null>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -638,9 +668,81 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
     () => () => {
       void tracker.current?.stop();
       faceTracker.current?.stop();
+      void stopDictation();
     },
     [],
   );
+
+  function startDictation(startedAt: number) {
+    const session: DictationSession = {
+      record: { chunks: [], activity: [] },
+      startedAt,
+      lastHeard: performance.now(),
+      active: true,
+      stopCurrent: null,
+      watchdog: null,
+      ended: null,
+    };
+    const heard = () => {
+      const now = performance.now();
+      session.lastHeard = now;
+      const at = Math.round((now - session.startedAt) / 100) / 10;
+      session.record.activity.push(at);
+      return at;
+    };
+    const listen = () => {
+      session.stopCurrent = startListening({
+        onInterim: (text) => {
+          if (text.trim()) heard();
+        },
+        onFinal: (text) => {
+          const at = heard();
+          if (text.trim()) session.record.chunks.push({ text, at });
+        },
+        // A real error (for example, the microphone is blocked) stops dictation; the rehearsal goes on.
+        onError: (message) => {
+          session.active = false;
+          setDictationError(message);
+        },
+        // Chrome ends dictation on its own after a while; keep it going during the rehearsal.
+        onEnd: () => {
+          if (session.active) listen();
+          else session.ended?.();
+        },
+      });
+    };
+    // Speaking with no dictation for a while means it stalled: restart it.
+    session.watchdog = setInterval(() => {
+      const now = performance.now();
+      if (session.active && speakingNow.current && now - session.lastHeard > DICTATION_GAP_SECONDS * 1000) {
+        session.lastHeard = now;
+        session.stopCurrent?.();
+      }
+    }, 1000);
+    dictation.current = session;
+    listen();
+  }
+
+  /** Stops dictation and waits briefly for the last piece. Null when dictation was off. */
+  async function stopDictation(): Promise<DictationRecord | null> {
+    const session = dictation.current;
+    dictation.current = null;
+    if (!session) return null;
+    if (session.watchdog) clearInterval(session.watchdog);
+    const wasActive = session.active;
+    session.active = false;
+    if (wasActive) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, DICTATION_FLUSH_MS);
+        session.ended = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        session.stopCurrent?.();
+      });
+    }
+    return session.record;
+  }
 
   async function startCamera() {
     if (!video.current) return;
@@ -682,14 +784,19 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   async function start() {
     setStep({ name: "starting" });
     setSpeaking(false);
-    const result = await startVoiceTracker("rehearsal", (live) => setSpeaking(live.speaking));
+    setDictationError(null);
+    const result = await startVoiceTracker("rehearsal", (live) => {
+      setSpeaking(live.speaking);
+      speakingNow.current = live.speaking;
+    });
     if (!result.ok) {
       setStep({ name: "ready", error: result.message });
       return;
     }
     tracker.current = result.tracker;
-    // Face frames from now on belong to the rehearsal; the reference pose seconds are left out.
+    // Face frames and dictation times from now on belong to the rehearsal; the reference pose seconds are left out.
     faceTracker.current?.takeFrames();
+    if (dictationOn) startDictation(performance.now());
     setFaceSeen(true);
     setNow(Date.now());
     setStep({ name: "running", startedAt: Date.now() });
@@ -697,7 +804,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
 
   async function stop() {
     setStep({ name: "stopping" });
-    const record = await tracker.current?.stop();
+    const [record, dictated] = await Promise.all([tracker.current?.stop(), stopDictation()]);
     tracker.current = null;
     // The frames are kept only until the result is computed, to find low-gaze sentences.
     const face =
@@ -705,8 +812,14 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         ? { frames: faceTracker.current.takeFrames(), baseline: camera.baseline }
         : null;
     stopCamera();
-    if (record) setStep({ name: "askReadToEnd", input: { script, limitSeconds, record, face, dictation: null } });
-    else setStep({ name: "ready", error: null });
+    if (!record) {
+      setStep({ name: "ready", error: null });
+      return;
+    }
+    const input: RehearsalInput = { script, limitSeconds, record, face, dictation: dictated };
+    // With dictation the reading is known, so "대본을 끝까지 읽었나요?" is not asked.
+    if (needsReadToEnd(dictated)) setStep({ name: "askReadToEnd", input });
+    else finish(input, null);
   }
 
   function finish(input: RehearsalInput, readToEnd: boolean | null) {
@@ -796,6 +909,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
             {formatTime(elapsed)} / 제한 {formatTime(limitSeconds)}
           </span>
           <span className={speaking ? styles.speaking : styles.muted}>{speaking ? "말하는 중" : "조용함"}</span>
+          {dictationOn && <span className={styles.muted}>받아쓰기 켜짐</span>}
         </p>
       ) : (
         <p className={styles.muted}>
@@ -805,6 +919,11 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
       {step.name === "ready" && step.error && (
         <p className={styles.alert} role="alert">
           {step.error}
+        </p>
+      )}
+      {dictationError && (
+        <p className={styles.warningText} role="alert">
+          받아쓰기가 멈췄어요: {dictationError}
         </p>
       )}
 
@@ -850,6 +969,18 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         )}
       </div>
 
+      {dictationAvailable && !running && step.name !== "stopping" && (
+        <label className={styles.checkRow}>
+          <input
+            type="checkbox"
+            checked={dictationOn}
+            onChange={(event) => setDictationOn(event.target.checked)}
+            disabled={step.name === "starting"}
+          />
+          {DICTATION_OPTION_LABEL}
+        </label>
+      )}
+
       <div className={styles.scriptView}>{script}</div>
 
       <div className={styles.actions}>
@@ -871,7 +1002,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
           처음으로
         </button>
       </div>
-      <p className={styles.muted}>{REHEARSAL_NOTICE}</p>
+      <p className={styles.muted}>{dictationOn ? DICTATION_ON_NOTICE : REHEARSAL_NOTICE}</p>
     </section>
   );
 }
