@@ -4,6 +4,8 @@ import {
   FACE_PRACTICE_NOTICE,
   NO_CAMERA_NOTE,
   faceItems,
+  isLookingAtScreen,
+  lookingChecks,
   lowGazeLabel,
   measureBaseline,
   notEnoughFaceDetail,
@@ -363,5 +365,37 @@ describe("result screen text", () => {
     expect(FACE_PRACTICE_NOTICE).toBe("연습용 참고 점수예요. 채점이나 평가에 쓰지 마세요.");
     expect(FACE_DESIGN_NOTICE).toContain("설계 값");
     expect(NO_CAMERA_NOTE).toBe("카메라를 켜지 않아 얼굴 행동 점수는 없어요.");
+  });
+});
+
+describe("lookingChecks (for the development panel)", () => {
+  const base: FaceBaseline = { yaw: 5, pitch: -10, lookDown: 0.3, lookAway: 0.1, smile: 0.1 };
+  const at = (change: Partial<FaceFrame>): FaceFrame => ({ t: 0, ...LOOKING, ...change });
+
+  it("shows each value as a difference from the reference pose, with its sign", () => {
+    const checks = lookingChecks(at({ yaw: -3, pitch: -22, lookDown: 0.65, lookAway: 0.05 }), base);
+    expect(checks.yaw.diff).toBeCloseTo(-8);
+    expect(checks.pitch.diff).toBeCloseTo(-12);
+    expect(checks.lookDown.diff).toBeCloseTo(0.35);
+    expect(checks.lookAway.diff).toBeCloseTo(-0.05);
+  });
+
+  it("says which rule each value passes, by the same rules as the score", () => {
+    const checks = lookingChecks(at({ yaw: 20, pitch: -24.9, lookDown: 0.6, lookAway: 0.39 }), base);
+    expect([checks.yaw.ok, checks.pitch.ok, checks.lookDown.ok, checks.lookAway.ok]).toEqual([false, true, false, true]);
+  });
+
+  it.each([
+    [{}],
+    [{ yaw: 20 }],
+    [{ pitch: -25 }],
+    [{ lookDown: 0.6 }],
+    [{ lookDown: 0.59 }],
+    [{ lookAway: 0.4 }],
+    [{ yaw: -9.9, pitch: 4.9, lookDown: 0, lookAway: 0.39 }],
+  ])("agrees with isLookingAtScreen for %o", (change) => {
+    const checks = lookingChecks(at(change), base);
+    const allOk = checks.yaw.ok && checks.pitch.ok && checks.lookDown.ok && checks.lookAway.ok;
+    expect(allOk).toBe(isLookingAtScreen(at(change), base));
   });
 });

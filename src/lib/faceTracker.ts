@@ -110,6 +110,8 @@ export function cameraErrorMessage(error: unknown): string {
 // ---------- Browser ----------
 
 export interface FaceTracker {
+  /** Whether MediaPipe runs on the graphics chip or, when that failed, on the CPU. */
+  readonly delegate: "GPU" | "CPU";
   /** Frames since the last call (times from that call), then starts a new batch from 0 seconds. */
   takeFrames(): FaceFrame[];
   /** Turns the camera off and frees the model. */
@@ -145,6 +147,7 @@ export async function startFaceTracker(
   }
 
   let landmarker;
+  let delegate: "GPU" | "CPU" = "GPU";
   try {
     const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
     const fileset = await FilesetResolver.forVisionTasks(FACE_ASSET_PATH);
@@ -156,7 +159,10 @@ export async function startFaceTracker(
         outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: true,
       });
-    landmarker = await create("GPU").catch(() => create("CPU"));
+    landmarker = await create("GPU").catch(() => {
+      delegate = "CPU";
+      return create("CPU");
+    });
   } catch (error) {
     console.error(error);
     stopStream(stream);
@@ -185,6 +191,7 @@ export async function startFaceTracker(
   return {
     ok: true,
     tracker: {
+      delegate,
       takeFrames() {
         const taken = frames;
         frames = [];

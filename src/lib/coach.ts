@@ -446,17 +446,34 @@ async function requestReview(input: ReviewInput, create: CreateMessage, model: s
   return review;
 }
 
+// Every time a reply is asked for again, one line goes to the server log so retries can be counted
+// later. Only the reason is written, never the coach's text.
+const RETRY_LOG = "[코치 다시 받기]";
+
+function logBrokenReply(error: unknown, what: string, log: (line: string) => void): CoachErrorKind {
+  const kind = classifyError(error);
+  // The screen asks once more after a broken reply (shouldAutoRetry).
+  if (kind === "invalid_response") log(`${RETRY_LOG} ${what}: 형식 깨짐`);
+  return kind;
+}
+
 /** Reviews a script. Asks once more when items are missing, then shows what it has. */
-export async function reviewScript(input: ReviewInput, create: CreateMessage, model: string): Promise<ReviewResult> {
+export async function reviewScript(
+  input: ReviewInput,
+  create: CreateMessage,
+  model: string,
+  log: (line: string) => void = console.info,
+): Promise<ReviewResult> {
   let review;
   try {
     review = await requestReview(input, create, model);
   } catch (error) {
-    const kind = classifyError(error);
+    const kind = logBrokenReply(error, "대본 평가", log);
     return { ok: false, kind, message: ERROR_MESSAGES[kind] };
   }
 
   if (findShortages(review).length > 0) {
+    log(`${RETRY_LOG} 대본 평가: 빠진 항목`);
     const retry = await requestReview(input, create, model).catch(() => null);
     review = chooseReview(review, retry);
   }
@@ -487,7 +504,12 @@ async function requestAnswerFeedback(input: AnswerInput, create: CreateMessage, 
 }
 
 /** Evaluates all answers in one call. Skipped questions are not sent; missing results are asked for once more. */
-export async function evaluateAnswers(input: AnswerInput, create: CreateMessage, model: string): Promise<AnswerResult> {
+export async function evaluateAnswers(
+  input: AnswerInput,
+  create: CreateMessage,
+  model: string,
+  log: (line: string) => void = console.info,
+): Promise<AnswerResult> {
   if (!input.answers.some(isAnswered)) {
     return { ok: true, evaluations: answerEvaluations(input.answers, new Map()), notices: [] };
   }
@@ -496,12 +518,13 @@ export async function evaluateAnswers(input: AnswerInput, create: CreateMessage,
   try {
     found = await requestAnswerFeedback(input, create, model);
   } catch (error) {
-    const kind = classifyError(error);
+    const kind = logBrokenReply(error, "답변 평가", log);
     return { ok: false, kind, message: ERROR_MESSAGES[kind] };
   }
 
   const countMissing = () => answerEvaluations(input.answers, found).filter((e) => e.status === "missing").length;
   if (countMissing() > 0) {
+    log(`${RETRY_LOG} 답변 평가: 빠진 항목`);
     const retry = await requestAnswerFeedback(input, create, model).catch(() => null);
     // Results from the first call win; the retry only fills the gaps.
     if (retry) found = new Map([...retry, ...found]);
@@ -549,10 +572,7 @@ function itemText(item: DeliveryItemFeedback): string {
   return `${item.explain} ${item.tryThis ?? ""}`;
 }
 
-// Why rehearsal feedback was asked for again, in a fixed order. Written to the server log so retries
-// can be counted later; the coach's text itself is never written.
-const RETRY_LOG = "[코치 다시 받기] 리허설 피드백";
-
+// Why rehearsal feedback was asked for again, in a fixed order.
 function retryReasons(feedback: DeliveryFeedback, expected: number, sent: string): string[] {
   const checks = [feedback.summary, ...feedback.items.map(itemText)].map((text) => checkText(text, sent));
   return [
@@ -603,16 +623,14 @@ export async function coachDelivery(
   try {
     first = await requestDeliveryFeedback(input, create, model);
   } catch (error) {
-    const kind = classifyError(error);
-    // The screen asks once more after a broken reply (shouldAutoRetry).
-    if (kind === "invalid_response") log(`${RETRY_LOG}: 형식 깨짐`);
+    const kind = logBrokenReply(error, "리허설 피드백", log);
     return { ok: false, kind, message: ERROR_MESSAGES[kind] };
   }
 
   const sent = buildDeliveryMessage(input);
   const expected = input.items.filter((i) => i.score !== null).length + (input.face?.items.length ?? 0);
   const reasons = retryReasons(first, expected, sent);
-  if (reasons.length > 0) log(`${RETRY_LOG}: ${reasons.join(", ")}`);
+  if (reasons.length > 0) log(`${RETRY_LOG} 리허설 피드백: ${reasons.join(", ")}`);
   const retry = reasons.length > 0 ? await requestDeliveryFeedback(input, create, model).catch(() => null) : null;
   const feedback = combineFeedback(retry ? [first, retry] : [first], sent);
 

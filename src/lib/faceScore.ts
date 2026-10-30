@@ -126,13 +126,34 @@ export function measureBaseline(
   };
 }
 
+export interface LookingCheck {
+  /** The value minus the reference pose, with its sign. */
+  diff: number;
+  ok: boolean;
+}
+
+/**
+ * Each rule for "looking at the screen", as a difference from the reference pose and whether it passes.
+ * Head angles may differ either way; eyes only count when lowered or turned aside more than usual.
+ */
+export function lookingChecks(
+  frame: FaceFrame,
+  baseline: FaceBaseline,
+): Record<"yaw" | "pitch" | "lookDown" | "lookAway", LookingCheck> {
+  const yaw = round(frame.yaw - baseline.yaw);
+  const pitch = round(frame.pitch - baseline.pitch);
+  const lookDown = round(frame.lookDown - baseline.lookDown);
+  const lookAway = round(frame.lookAway - baseline.lookAway);
+  return {
+    yaw: { diff: yaw, ok: Math.abs(yaw) < LOOK_MAX_YAW },
+    pitch: { diff: pitch, ok: Math.abs(pitch) < LOOK_MAX_PITCH },
+    lookDown: { diff: lookDown, ok: lookDown < LOOK_MAX_EYE_DOWN },
+    lookAway: { diff: lookAway, ok: lookAway < LOOK_MAX_EYE_AWAY },
+  };
+}
+
 export function isLookingAtScreen(frame: FaceFrame, baseline: FaceBaseline): boolean {
-  return (
-    round(Math.abs(frame.yaw - baseline.yaw)) < LOOK_MAX_YAW &&
-    round(Math.abs(frame.pitch - baseline.pitch)) < LOOK_MAX_PITCH &&
-    round(frame.lookDown - baseline.lookDown) < LOOK_MAX_EYE_DOWN &&
-    round(frame.lookAway - baseline.lookAway) < LOOK_MAX_EYE_AWAY
-  );
+  return Object.values(lookingChecks(frame, baseline)).every((check) => check.ok);
 }
 
 export function isSmiling(frame: FaceFrame, baseline: FaceBaseline): boolean {

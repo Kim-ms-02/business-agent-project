@@ -205,3 +205,36 @@ describe("evaluateAnswers", () => {
     expect(!result.ok && result.kind).toBe("network");
   });
 });
+
+describe("evaluateAnswers: retry log for counting", () => {
+  function run(...replies: Anthropic.Message[]) {
+    const create = vi.fn<CreateMessage>();
+    replies.forEach((reply) => create.mockResolvedValueOnce(reply));
+    const log = vi.fn<(line: string) => void>();
+    return { done: evaluateAnswers(input, create, "m", log), log };
+  }
+
+  it("writes nothing when every answered question was evaluated", async () => {
+    const { done, log } = run(toolReply([evaluation(1), evaluation(3)]));
+    await done;
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("writes one line when results are missing, without the answers' text", async () => {
+    const { done, log } = run(toolReply([evaluation(1)]), toolReply([evaluation(3)]));
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 답변 평가: 빠진 항목"]]);
+  });
+
+  it("writes a line when the reply is broken, because the screen then asks once more", async () => {
+    const { done, log } = run(message([{ type: "text", text: "그냥 글" }], "end_turn"));
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 답변 평가: 형식 깨짐"]]);
+  });
+
+  it("writes nothing for a refusal, which is not asked again", async () => {
+    const { done, log } = run(message([], "refusal"));
+    await done;
+    expect(log).not.toHaveBeenCalled();
+  });
+});
