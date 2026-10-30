@@ -227,3 +227,36 @@ describe("reviewScript", () => {
     });
   });
 });
+
+describe("reviewScript: retry log for counting", () => {
+  function run(...replies: Anthropic.Message[]) {
+    const create = vi.fn<CreateMessage>();
+    replies.forEach((reply) => create.mockResolvedValueOnce(reply));
+    const log = vi.fn<(line: string) => void>();
+    return { done: reviewScript(input, create, "m", log), log };
+  }
+
+  it("writes nothing when the review is complete", async () => {
+    const { done, log } = run(toolReply(reviewInput()));
+    await done;
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("writes one line when items are missing, without the review's text", async () => {
+    const { done, log } = run(toolReply(reviewInput(1)), toolReply(reviewInput()));
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 대본 평가: 빠진 항목"]]);
+  });
+
+  it("writes a line when the reply is broken, because the screen then asks once more", async () => {
+    const { done, log } = run(message([{ type: "text", text: "그냥 글" }], "end_turn"));
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 대본 평가: 형식 깨짐"]]);
+  });
+
+  it("writes nothing for a refusal, which is not asked again", async () => {
+    const { done, log } = run(message([], "refusal"));
+    await done;
+    expect(log).not.toHaveBeenCalled();
+  });
+});
