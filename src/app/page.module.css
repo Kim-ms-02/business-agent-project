@@ -250,3 +250,41 @@
   font-size: 2rem;
   font-weight: 700;
 }
+
+.cameraBox {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.cameraPreview {
+  width: 160px;
+  border-radius: 8px;
+  transform: scaleX(-1);
+}
+
+.cameraSmall {
+  width: 120px;
+}
+
+.cameraControls {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.warningText {
+  color: var(--warning-text);
+  font-weight: 600;
+}
+
+.practiceNotice {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-weight: 600;
+}

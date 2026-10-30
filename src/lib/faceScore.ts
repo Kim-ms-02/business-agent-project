@@ -1,4 +1,5 @@
 import type { Band } from "./deliveryConfig";
+import { formatTime } from "./deliveryScore";
 import {
   BASELINE_MIN_RATIO,
   EXPRESSION_BANDS,
@@ -41,10 +42,13 @@ export interface FaceFrame {
   faceWidth: number;
 }
 
-/** Average head angle while looking at the screen before the rehearsal. */
+/** Average face values while looking at the screen before the rehearsal. */
 export interface FaceBaseline {
   yaw: number;
   pitch: number;
+  lookDown: number;
+  lookAway: number;
+  smile: number;
 }
 
 export interface FaceItemScore {
@@ -70,6 +74,10 @@ export type FaceResult =
     };
 
 export const FACE_NOT_ENOUGH_MESSAGE = "측정이 부족해요";
+export const FACE_PRACTICE_NOTICE = "연습용 참고 점수예요. 채점이나 평가에 쓰지 마세요.";
+export const FACE_DESIGN_NOTICE =
+  "얼굴 점수 기준선은 과학적으로 정해진 값이 아니라 이 앱이 정한 설계 값이에요. 감정이나 성격은 판단하지 않아요.";
+export const NO_CAMERA_NOTE = "카메라를 켜지 않아 얼굴 행동 점수는 없어요.";
 export const BASELINE_FAILED_MESSAGE = "얼굴을 찾지 못했어요. 얼굴이 화면 가운데 보이게 한 뒤 다시 재 주세요";
 
 // Ratios built from many floats drift (0.7 can come out as 0.6999…), so values are rounded before
@@ -104,9 +112,16 @@ export function measureBaseline(
   if (found.length === 0 || ratio(frames, (f) => f.detected) < BASELINE_MIN_RATIO) {
     return { ok: false, message: BASELINE_FAILED_MESSAGE };
   }
+  const average = (key: keyof FaceBaseline) => round(mean(found.map((f) => f[key])));
   return {
     ok: true,
-    baseline: { yaw: round(mean(found.map((f) => f.yaw))), pitch: round(mean(found.map((f) => f.pitch))) },
+    baseline: {
+      yaw: average("yaw"),
+      pitch: average("pitch"),
+      lookDown: average("lookDown"),
+      lookAway: average("lookAway"),
+      smile: average("smile"),
+    },
   };
 }
 
@@ -114,9 +129,13 @@ export function isLookingAtScreen(frame: FaceFrame, baseline: FaceBaseline): boo
   return (
     round(Math.abs(frame.yaw - baseline.yaw)) < LOOK_MAX_YAW &&
     round(Math.abs(frame.pitch - baseline.pitch)) < LOOK_MAX_PITCH &&
-    frame.lookDown < LOOK_MAX_EYE_DOWN &&
-    frame.lookAway < LOOK_MAX_EYE_AWAY
+    round(frame.lookDown - baseline.lookDown) < LOOK_MAX_EYE_DOWN &&
+    round(frame.lookAway - baseline.lookAway) < LOOK_MAX_EYE_AWAY
   );
+}
+
+export function isSmiling(frame: FaceFrame, baseline: FaceBaseline): boolean {
+  return round(frame.smile - baseline.smile) > SMILE_MIN;
 }
 
 function isWellFramed(frame: FaceFrame): boolean {
@@ -172,7 +191,7 @@ export function scoreFace(frames: FaceFrame[], baseline: FaceBaseline): FaceResu
     reason: `화면을 본 시간 ${percent(gazeRatio)}`,
   };
 
-  const smileRatio = ratio(found, (f) => f.smile > SMILE_MIN);
+  const smileRatio = ratio(found, (f) => isSmiling(f, baseline));
   const expression: FaceItemScore = {
     score: bandScore(smileRatio, EXPRESSION_BANDS, EXPRESSION_LOWEST_SCORE),
     value: smileRatio,
@@ -205,4 +224,35 @@ export function scoreFace(frames: FaceFrame[], baseline: FaceBaseline): FaceResu
     lowGazeWindows: lowGazeWindows(found, baseline, endsAt),
     total: Math.round((sum / (Object.keys(items).length * MAX_FACE_ITEM_SCORE)) * 100),
   };
+}
+
+// ---------- Result screen text ----------
+
+export interface FaceItemRow {
+  label: string;
+  score: string;
+  reason: string;
+}
+
+export function faceItems(result: Extract<FaceResult, { measured: true }>): FaceItemRow[] {
+  const { gaze, expression, head, framing } = result.items;
+  const rows: [string, FaceItemScore][] = [
+    ["시선", gaze],
+    ["표정", expression],
+    ["고개 움직임", head],
+    ["화면 안 자세", framing],
+  ];
+  return rows.map(([label, item]) => ({ label, score: `${item.score} / ${MAX_FACE_ITEM_SCORE}`, reason: item.reason }));
+}
+
+export function lowGazeLabel(window: TimeWindow): string {
+  return `${formatTime(window.start)}~${formatTime(window.end)}`;
+}
+
+export function undetectedLabel(seconds: number): string {
+  return `측정 불가 시간 ${Math.round(seconds)}초`;
+}
+
+export function notEnoughFaceDetail(measuredRatio: number): string {
+  return `얼굴을 찾은 시간이 ${percent(measuredRatio)}예요. 절반 이상 보여야 점수를 낼 수 있어요.`;
 }

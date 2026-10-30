@@ -3,6 +3,21 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { QUESTION_COUNT } from "@/lib/coachConfig";
 import { MIN_SPOKEN_SECONDS, SILENCE_SECONDS } from "@/lib/deliveryConfig";
+import { BASELINE_SECONDS } from "@/lib/faceConfig";
+import {
+  FACE_DESIGN_NOTICE,
+  FACE_PRACTICE_NOTICE,
+  NO_CAMERA_NOTE,
+  faceItems,
+  lowGazeLabel,
+  measureBaseline,
+  notEnoughFaceDetail,
+  scoreFace,
+  undetectedLabel,
+  type FaceBaseline,
+  type FaceResult,
+} from "@/lib/faceScore";
+import { BASELINE_PROMPT, CAMERA_NOTICE, startFaceTracker, type FaceTracker } from "@/lib/faceTracker";
 import {
   DESIGN_VALUE_NOTICE,
   SPEED_LIMIT_NOTICE,
@@ -561,8 +576,17 @@ type RehearsalStep =
   | { name: "starting" }
   | { name: "running"; startedAt: number }
   | { name: "stopping" }
-  | { name: "askReadToEnd"; record: VoiceRecord }
-  | { name: "result"; result: DeliveryResult };
+  | { name: "askReadToEnd"; record: VoiceRecord; face: FaceResult | null }
+  | { name: "result"; result: DeliveryResult; face: FaceResult | null };
+
+// The camera is optional. When it is on, the reference pose is measured before the rehearsal starts.
+type CameraState =
+  | { name: "off" }
+  | { name: "starting" }
+  | { name: "measuring" }
+  | { name: "ready"; baseline: FaceBaseline }
+  | { name: "baselineFailed"; message: string }
+  | { name: "failed"; message: string };
 
 type CoachState =
   | { name: "none" }
@@ -588,12 +612,53 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   const [speaking, setSpeaking] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [coach, setCoach] = useState<CoachState>({ name: "none" });
+  const [camera, setCamera] = useState<CameraState>({ name: "off" });
+  const [faceSeen, setFaceSeen] = useState(true);
   const tracker = useRef<VoiceTracker | null>(null);
+  const faceTracker = useRef<FaceTracker | null>(null);
+  const video = useRef<HTMLVideoElement>(null);
   // A reply for an earlier rehearsal is ignored once a new one has started.
   const coachRequest = useRef(0);
 
-  // Turn the microphone off if the speaker leaves in the middle of a rehearsal.
-  useEffect(() => () => void tracker.current?.stop(), []);
+  // Turn the microphone and camera off if the speaker leaves in the middle of a rehearsal.
+  useEffect(
+    () => () => {
+      void tracker.current?.stop();
+      faceTracker.current?.stop();
+    },
+    [],
+  );
+
+  async function startCamera() {
+    if (!video.current) return;
+    setCamera({ name: "starting" });
+    const result = await startFaceTracker(video.current, (frame) => setFaceSeen(frame.detected));
+    if (!result.ok) {
+      setCamera({ name: "failed", message: result.message });
+      return;
+    }
+    faceTracker.current = result.tracker;
+    measurePose();
+  }
+
+  function measurePose() {
+    const current = faceTracker.current;
+    if (!current) return;
+    current.takeFrames();
+    setCamera({ name: "measuring" });
+    setTimeout(() => {
+      // The camera may have been turned off while measuring.
+      if (faceTracker.current !== current) return;
+      const result = measureBaseline(current.takeFrames());
+      setCamera(result.ok ? { name: "ready", baseline: result.baseline } : { name: "baselineFailed", message: result.message });
+    }, BASELINE_SECONDS * 1000);
+  }
+
+  function stopCamera() {
+    faceTracker.current?.stop();
+    faceTracker.current = null;
+    setCamera({ name: "off" });
+  }
 
   useEffect(() => {
     if (step.name !== "running") return;
@@ -610,6 +675,9 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
       return;
     }
     tracker.current = result.tracker;
+    // Face frames from now on belong to the rehearsal; the reference pose seconds are left out.
+    faceTracker.current?.takeFrames();
+    setFaceSeen(true);
     setNow(Date.now());
     setStep({ name: "running", startedAt: Date.now() });
   }
@@ -618,13 +686,16 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
     setStep({ name: "stopping" });
     const record = await tracker.current?.stop();
     tracker.current = null;
-    if (record) setStep({ name: "askReadToEnd", record });
+    const face =
+      camera.name === "ready" && faceTracker.current ? scoreFace(faceTracker.current.takeFrames(), camera.baseline) : null;
+    stopCamera();
+    if (record) setStep({ name: "askReadToEnd", record, face });
     else setStep({ name: "ready", error: null });
   }
 
-  function answerReadToEnd(record: VoiceRecord, readToEnd: boolean) {
+  function answerReadToEnd(record: VoiceRecord, face: FaceResult | null, readToEnd: boolean) {
     const result = scoreDelivery({ record, scriptSyllables: countSyllables(script), limitSeconds, readToEnd });
-    setStep({ name: "result", result });
+    setStep({ name: "result", result, face });
     if (result.measured) void askCoach(deliverySummary(result));
     else setCoach({ name: "none" });
   }
@@ -655,6 +726,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
     return (
       <DeliveryReport
         result={step.result}
+        face={step.face}
         coach={coach}
         onRetryCoach={() => {
           if (step.result.measured) void askCoach(deliverySummary(step.result));
@@ -671,10 +743,10 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         <p className={styles.question}>대본을 끝까지 읽었나요?</p>
         <p className={styles.muted}>말 속도는 대본 전체를 읽었을 때만 잴 수 있어요.</p>
         <div className={styles.actions}>
-          <button className={styles.primary} type="button" onClick={() => answerReadToEnd(step.record, true)}>
+          <button className={styles.primary} type="button" onClick={() => answerReadToEnd(step.record, step.face, true)}>
             예
           </button>
-          <button className={styles.secondary} type="button" onClick={() => answerReadToEnd(step.record, false)}>
+          <button className={styles.secondary} type="button" onClick={() => answerReadToEnd(step.record, step.face, false)}>
             아니요
           </button>
         </div>
@@ -684,6 +756,9 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
 
   const running = step.name === "running";
   const elapsed = running ? Math.max(0, (now - step.startedAt) / 1000) : 0;
+  const cameraOn = camera.name !== "off" && camera.name !== "failed";
+  // With the camera on, the rehearsal waits for a usable reference pose (or for the camera to be turned off).
+  const cameraBlocksStart = camera.name === "starting" || camera.name === "measuring" || camera.name === "baselineFailed";
 
   return (
     <section className={styles.card}>
@@ -706,6 +781,48 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         </p>
       )}
 
+      <div className={styles.cameraBox}>
+        <video
+          ref={video}
+          className={running ? `${styles.cameraPreview} ${styles.cameraSmall}` : styles.cameraPreview}
+          muted
+          playsInline
+          hidden={!cameraOn}
+        />
+        {running ? (
+          camera.name === "ready" && !faceSeen && <p className={styles.warningText}>얼굴이 안 보여요</p>
+        ) : (
+          <div className={styles.cameraControls}>
+            <p className={styles.muted}>카메라 (선택): {CAMERA_NOTICE}</p>
+            {camera.name === "measuring" && <p className={styles.speaking}>{BASELINE_PROMPT}</p>}
+            {camera.name === "ready" && <p className={styles.muted}>기준 자세를 쟀어요. 이제 리허설을 시작해 주세요.</p>}
+            {(camera.name === "failed" || camera.name === "baselineFailed") && (
+              <p className={styles.alert} role="alert">
+                {camera.message}
+              </p>
+            )}
+            <div className={styles.actions}>
+              {cameraOn ? (
+                <>
+                  {(camera.name === "ready" || camera.name === "baselineFailed") && (
+                    <button className={styles.secondary} type="button" onClick={measurePose}>
+                      기준 자세 다시 재기
+                    </button>
+                  )}
+                  <button className={styles.secondary} type="button" onClick={stopCamera} disabled={step.name === "starting"}>
+                    카메라 끄기
+                  </button>
+                </>
+              ) : (
+                <button className={styles.secondary} type="button" onClick={() => void startCamera()}>
+                  카메라 켜기
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className={styles.scriptView}>{script}</div>
 
       <div className={styles.actions}>
@@ -718,7 +835,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
             className={styles.primary}
             type="button"
             onClick={() => void start()}
-            disabled={step.name === "starting"}
+            disabled={step.name === "starting" || cameraBlocksStart}
           >
             {step.name === "starting" ? "마이크 켜는 중…" : "리허설 시작"}
           </button>
@@ -734,12 +851,14 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
 
 function DeliveryReport({
   result,
+  face,
   coach,
   onRetryCoach,
   onAgain,
   onRestart,
 }: {
   result: DeliveryResult;
+  face: FaceResult | null;
   coach: CoachState;
   onRetryCoach: () => void;
   onAgain: () => void;
@@ -783,6 +902,8 @@ function DeliveryReport({
           </>
         )}
       </section>
+
+      {face ? <FaceReport face={face} /> : <p className={styles.muted}>{NO_CAMERA_NOTE}</p>}
 
       {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
 
@@ -843,6 +964,46 @@ function CoachFeedback({ coach, onRetry }: { coach: Exclude<CoachState, { name: 
           <p className={styles.muted}>코치는 점수를 바꾸지 않고, 앱이 잰 숫자만 보고 풀어 줘요.</p>
         </>
       )}
+    </section>
+  );
+}
+
+function FaceReport({ face }: { face: FaceResult }) {
+  return (
+    <section className={styles.card}>
+      <h2>얼굴 행동 점수</h2>
+      <p className={styles.practiceNotice}>{FACE_PRACTICE_NOTICE}</p>
+      {face.measured ? (
+        <>
+          <p className={styles.total}>
+            {face.total}점 <span className={styles.muted}>/ 100</span>
+          </p>
+          <dl className={styles.details}>
+            {faceItems(face).map((item) => (
+              <Detail key={item.label} label={item.label}>
+                <strong>{item.score}</strong> · {item.reason}
+              </Detail>
+            ))}
+          </dl>
+          <h3>시선이 낮았던 구간</h3>
+          {face.lowGazeWindows.length === 0 ? (
+            <p className={styles.muted}>없어요.</p>
+          ) : (
+            <ul className={styles.itemList}>
+              {face.lowGazeWindows.map((window) => (
+                <li key={window.start}>{lowGazeLabel(window)}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : (
+        <>
+          <p className={styles.alert}>{face.message}</p>
+          <p className={styles.muted}>{notEnoughFaceDetail(face.measuredRatio)}</p>
+        </>
+      )}
+      <p className={styles.muted}>{undetectedLabel(face.undetectedSeconds)}</p>
+      <p className={styles.muted}>{FACE_DESIGN_NOTICE}</p>
     </section>
   );
 }
