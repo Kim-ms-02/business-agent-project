@@ -503,7 +503,7 @@ describe("sentence timelines", () => {
   });
 
   it("gives stage directions and a rehearsal with no speech no time", () => {
-    const withNote = scriptSentences(`${TEN[0]} (웃음) ${TEN[1]}`);
+    const withNote = scriptSentences(`${TEN[0]}\n(웃음)\n${TEN[1]}`);
     expect(estimatedTimeline(withNote, [{ start: 0, end: 10 }])[1]).toEqual([]);
     expect(estimatedTimeline(tenTable, [])).toEqual([[], [], []]);
   });
