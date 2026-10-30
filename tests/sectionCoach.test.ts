@@ -219,4 +219,16 @@ describe("SKILL.md section feedback rules", () => {
     expect(part).toMatch(/goal[^\n]*숫자/);
     expect(part).toContain("그대로 인용");
   });
+
+  // Night v1.0 check: 4 real calls in a row copied the goal example word for word.
+  it("does not give a full goal sentence that the coach can copy, and says not to copy examples", () => {
+    const part = skill.slice(skill.indexOf("## 구간별 피드백"), skill.indexOf("## 결과 내는 방법"));
+    expect(part).not.toContain("이 문장 앞 멈춤을 3초 아래로 줄이기");
+    expect(part).toMatch(/예시[^\n]*그대로 옮기지 않는다/);
+  });
+
+  it("says to use 쯤 only when positions are estimated", () => {
+    const part = skill.slice(skill.indexOf("## 구간별 피드백"), skill.indexOf("## 결과 내는 방법"));
+    expect(part).toMatch(/받아쓰기 기준[^\n]*쯤[^\n]*쓰지 않는다/);
+  });
 });
