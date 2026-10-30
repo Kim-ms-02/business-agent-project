@@ -1,4 +1,5 @@
 import type { Band } from "./deliveryConfig";
+import { FACE_ITEMS, type FaceSummary } from "./types";
 import { formatTime } from "./deliveryScore";
 import {
   BASELINE_MIN_RATIO,
@@ -243,6 +244,17 @@ export function faceItems(result: Extract<FaceResult, { measured: true }>): Face
     ["화면 안 자세", framing],
   ];
   return rows.map(([label, item]) => ({ label, score: `${item.score} / ${MAX_FACE_ITEM_SCORE}`, reason: item.reason }));
+}
+
+/** The face scores the coach gets. Nothing when the camera was off or the face was not measured enough. */
+export function faceSummary(result: FaceResult | null): FaceSummary | undefined {
+  if (!result?.measured) return undefined;
+  const { gaze, expression, head, framing } = result.items;
+  return {
+    total: result.total,
+    items: [gaze, expression, head, framing].map(({ score, reason }, i) => ({ item: FACE_ITEMS[i], score, reason })),
+    lowGazeWindows: result.lowGazeWindows.map(({ start, end }) => ({ start, end })),
+  };
 }
 
 export function lowGazeLabel(window: TimeWindow): string {

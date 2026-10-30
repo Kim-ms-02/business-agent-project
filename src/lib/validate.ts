@@ -1,20 +1,27 @@
-import { IMPROVEMENT_COUNT, MAX_SUMMARY_SENTENCES, QUESTION_COUNT, STRENGTH_COUNT } from "./coachConfig";
+import {
+  BANNED_WORD_FORMS,
+  FEEDBACK_BANNED_WORDS,
+  IMPROVEMENT_COUNT,
+  MAX_SUMMARY_SENTENCES,
+  QUESTION_COUNT,
+  STRENGTH_COUNT,
+} from "./coachConfig";
 import { MAX_ITEM_SCORE } from "./deliveryConfig";
 import {
   CRITERIA,
-  DELIVERY_ITEMS,
   QUESTION_TYPES,
+  REHEARSAL_ITEMS,
   VERDICTS,
   type AnswerEvaluation,
   type AnswerFeedback,
   type CheckedReview,
   type Criterion,
   type DeliveryFeedback,
-  type DeliveryItem,
   type DeliveryItemFeedback,
   type Improvement,
   type Question,
   type QuestionType,
+  type RehearsalItem,
   type Review,
   type ReviewResult,
   type Section,
@@ -52,7 +59,8 @@ function text(value: unknown): string | null {
 }
 
 // Screen text is shown as plain text, so markdown marks would appear as-is.
-const MARKDOWN = /[*#_`~]/g;
+// A single ~ is kept: it joins two times, as in "0분 10초~0분 20초". Only ~~ (strikethrough) is removed.
+const MARKDOWN = /~~|[*#_`]/g;
 // Questions are read aloud, so brackets and other symbols are removed too.
 const SPOKEN_NOISE = /[*#_`~<>[\]{}()]/g;
 
@@ -294,15 +302,15 @@ export function feedbackLines(feedback: AnswerFeedback): { label: string; text: 
  */
 export function normalizeDeliveryFeedback(
   raw: unknown,
-  scores: ReadonlyMap<DeliveryItem, number | null>,
+  scores: ReadonlyMap<RehearsalItem, number | null>,
 ): DeliveryFeedback | null {
   if (!isRecord(raw) || !Array.isArray(raw.items)) return null;
   const summary = oneSentence(screen(raw.summary));
   if (summary === null) return null;
 
-  const found = new Map<DeliveryItem, DeliveryItemFeedback>();
+  const found = new Map<RehearsalItem, DeliveryItemFeedback>();
   for (const entry of list(raw.items)) {
-    const item = DELIVERY_ITEMS.find((name) => name === text(entry.item));
+    const item = REHEARSAL_ITEMS.find((name) => name === text(entry.item));
     const score = item ? scores.get(item) : undefined;
     if (!item || score === undefined || score === null || found.has(item)) continue;
     const explain = oneSentence(screen(entry.explain));
@@ -310,11 +318,59 @@ export function normalizeDeliveryFeedback(
     if (explain === null || (score !== MAX_ITEM_SCORE && tryThis === null)) continue;
     found.set(item, { item, explain, tryThis });
   }
-  return { summary, items: DELIVERY_ITEMS.flatMap((item) => found.get(item) ?? []) };
+  return { summary, items: REHEARSAL_ITEMS.flatMap((item) => found.get(item) ?? []) };
+}
+
+// ---------- Delivery feedback checks ----------
+
+export const UNVERIFIED_NUMBER_NOTE = "확인되지 않은 숫자가 있어요";
+
+// A time (0분 20초), a percent (45%), or a plain number, in the order they appear.
+const NUMBER_TOKEN = /(\d+)\s*분\s*(\d+)\s*초|(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)/g;
+
+interface NumberToken {
+  label: string;
+  key: string;
+  /** Plain numbers this token also allows, like the seconds of a time said on their own. */
+  parts: string[];
+}
+
+function numberTokens(value: string): NumberToken[] {
+  return [...value.matchAll(NUMBER_TOKEN)].map(([, minutes, seconds, percent, plain]) => {
+    if (minutes !== undefined) {
+      const [m, s] = [Number(minutes), Number(seconds)];
+      return { label: `${m}분 ${s}초`, key: `time:${m}:${s}`, parts: [`num:${m}`, `num:${s}`] };
+    }
+    if (percent !== undefined) return { label: `${percent}%`, key: `pct:${Number(percent)}`, parts: [] };
+    return { label: plain, key: `num:${Number(plain)}`, parts: [] };
+  });
+}
+
+/**
+ * Numbers in the coach's text that were not in what we sent, each once. Times and percents are
+ * checked as a whole: "0분 30초" needs that time to have been sent, not just a 0 and a 30.
+ * Numbers written in words (두 번) are not checked.
+ */
+export function unverifiedNumbers(text: string, sent: string): string[] {
+  const allowed = new Set(numberTokens(sent).flatMap((t) => [t.key, ...t.parts]));
+  const found = numberTokens(text).filter((t) => !allowed.has(t.key));
+  return [...new Set(found.map((t) => t.label))];
+}
+
+function withoutSpaces(value: string): string {
+  return value.replace(/\s+/g, "");
+}
+
+/** Banned words (from the config) in the coach's text, ignoring spaces. */
+export function bannedWords(text: string): string[] {
+  const compact = withoutSpaces(text);
+  return FEEDBACK_BANNED_WORDS.filter((word) =>
+    (BANNED_WORD_FORMS[word] ?? [word]).some((form) => compact.includes(withoutSpaces(form))),
+  );
 }
 
 export function missingDeliveryMessage(count: number): string {
-  return `말투 피드백을 ${count}개 항목에서 받지 못했어요`;
+  return `코치 피드백을 ${count}개 항목에서 받지 못했어요`;
 }
 
 // ---------- Quote check ----------

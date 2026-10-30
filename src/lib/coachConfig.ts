@@ -15,3 +15,16 @@ export const FEEDBACK_SENTENCES = 3;
 
 // Summary: biggest strength, first fix, an optional notice, and encouragement.
 export const MAX_SUMMARY_SENTENCES = 4;
+
+// Rehearsal feedback must describe behavior with numbers, not guess feelings (design principle 5).
+// If the coach's text contains one of these, it is asked once more; an item that still has one is left out.
+// Matching ignores spaces, so "자신 없" also catches "자신없어".
+export const FEEDBACK_BANNED_WORDS = ["긴장", "자신감", "자신 없", "불안", "떨", "표정이 어둡"];
+
+// Words whose plain form would catch too much or too little, with the forms actually searched for.
+// "떨" alone would also catch 떨어지다 ("시선이 떨어진 구간", to drop), which is not about feelings,
+// so only the trembling forms are searched. 어둡다 changes to 어두워 in speech, so both forms are searched.
+export const BANNED_WORD_FORMS: Record<string, string[]> = {
+  떨: ["떨리", "떨려", "떨렸", "떨림"],
+  "표정이 어둡": ["표정이 어둡", "표정이 어두"],
+};

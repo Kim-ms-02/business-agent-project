@@ -11,7 +11,7 @@ import {
 } from "@/lib/coach";
 import { deliverySummary, scoreDelivery } from "@/lib/deliveryScore";
 import { loadSkill } from "@/lib/skill";
-import { DELIVERY_ITEMS } from "@/lib/types";
+import { DELIVERY_ITEMS, FACE_ITEMS } from "@/lib/types";
 import { missingDeliveryMessage, normalizeDeliveryFeedback } from "@/lib/validate";
 
 // A summary the screen would send: speed 3, silence 2, volume 4, time 4.
@@ -67,11 +67,11 @@ describe("deliverySummary", () => {
 });
 
 describe("DELIVERY_TOOL", () => {
-  it("asks for a summary and one entry per item, named from the fixed item list", () => {
+  it("asks for a summary and one entry per item, named from the fixed delivery and face item lists", () => {
     const schema = DELIVERY_TOOL.input_schema;
     expect(schema.required).toEqual(["summary", "items"]);
     expect(schema.properties.items.items.required).toEqual(["item", "explain", "tryThis"]);
-    expect(schema.properties.items.items.properties.item.enum).toEqual([...DELIVERY_ITEMS]);
+    expect(schema.properties.items.items.properties.item.enum).toEqual([...DELIVERY_ITEMS, ...FACE_ITEMS]);
     expect(DELIVERY_TOOL.strict).toBe(true);
   });
 });
@@ -194,7 +194,7 @@ describe("normalizeDeliveryFeedback", () => {
 
 describe("missingDeliveryMessage", () => {
   it("says how many items have no feedback", () => {
-    expect(missingDeliveryMessage(2)).toBe("말투 피드백을 2개 항목에서 받지 못했어요");
+    expect(missingDeliveryMessage(2)).toBe("코치 피드백을 2개 항목에서 받지 못했어요");
   });
 });
 
@@ -227,7 +227,7 @@ describe("coachDelivery", () => {
     const create = vi.fn<CreateMessage>().mockResolvedValue(toolReply(allItems.slice(0, 3)));
     const result = await coachDelivery(input, create, "m");
     expect(create).toHaveBeenCalledTimes(2);
-    expect(result.ok && result.notices).toEqual(["말투 피드백을 1개 항목에서 받지 못했어요"]);
+    expect(result.ok && result.notices).toEqual(["코치 피드백을 1개 항목에서 받지 못했어요"]);
   });
 
   it("keeps the first feedback when the retry call fails", async () => {
