@@ -36,6 +36,7 @@ import {
   estimateSeconds,
   findShortages,
   firstSecondsText,
+  guidanceCount,
   inputError,
   isAnswered,
   missingAnswerMessage,
@@ -594,8 +595,12 @@ export async function reviewScript(
     return { ok: false, kind, message: ERROR_MESSAGES[kind] };
   }
 
-  if (findShortages(review).length > 0) {
-    log(`${RETRY_LOG} 대본 평가: 빠진 항목`);
+  const reasons = [
+    findShortages(review).length > 0 ? "빠진 항목" : null,
+    guidanceCount(review) > 0 ? "말해 보기 안내" : null,
+  ].filter((reason) => reason !== null);
+  if (reasons.length > 0) {
+    log(`${RETRY_LOG} 대본 평가: ${reasons.join(", ")}`);
     const retry = await requestReview(input, create, model).catch(() => null);
     review = chooseReview(review, retry);
   }

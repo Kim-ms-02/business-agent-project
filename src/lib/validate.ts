@@ -5,6 +5,7 @@ import {
   MAX_SUMMARY_SENTENCES,
   QUESTION_COUNT,
   STRENGTH_COUNT,
+  TRY_THIS_GUIDANCE,
 } from "./coachConfig";
 import { MAX_ITEM_SCORE } from "./deliveryConfig";
 import {
@@ -182,10 +183,28 @@ function itemCount(review: Review): number {
   return review.strengths.length + review.improvements.length + review.questions.length;
 }
 
-/** After one retry for a short review, picks the review to show. */
+/** True when a try-this line tells the speaker what to do rather than giving words to say. */
+export function tryThisGuidance(tryThis: string): boolean {
+  const compact = tryThis.replace(/\s+/g, "");
+  return TRY_THIS_GUIDANCE.some((word) => compact.includes(word));
+}
+
+/** Improvements whose try-this line has instructions mixed in. */
+export function guidanceCount(review: Review): number {
+  return review.improvements.filter((i) => tryThisGuidance(i.tryThis)).length;
+}
+
+/**
+ * After one retry (for a short review, or try-this lines with instructions), picks the review to show.
+ * A complete review beats a short one; between complete ones, fewer instructions wins, the first on a tie.
+ */
 export function chooseReview(first: Review, retry: Review | null): Review {
   if (retry === null) return first;
-  if (findShortages(retry).length === 0) return retry;
+  const firstComplete = findShortages(first).length === 0;
+  const retryComplete = findShortages(retry).length === 0;
+  if (retryComplete && !firstComplete) return retry;
+  if (retryComplete && firstComplete) return guidanceCount(retry) < guidanceCount(first) ? retry : first;
+  if (firstComplete) return first;
   return itemCount(retry) > itemCount(first) ? retry : first;
 }
 
