@@ -14,11 +14,15 @@ export interface ScriptSentence {
   to: number;
 }
 
+// A sentence that is only a bracketed note, like "(웃음)" or "[박수]", is a stage direction: it stays in
+// the table, so the screen can show every sentence in order, but has no syllables and is never a position.
+const STAGE_DIRECTION = /^(?:\([^()]*\)|\[[^[\]]*\])$/;
+
 /** The script split into sentences the same way as the rest of the app, with syllable positions. */
 export function scriptSentences(script: string): ScriptSentence[] {
   let from = 0;
   return splitSentences(script).map((text) => {
-    const syllables = countSyllables(text);
+    const syllables = STAGE_DIRECTION.test(text) ? 0 : countSyllables(text);
     const sentence = { text, syllables, from, to: from + syllables };
     from += syllables;
     return sentence;
