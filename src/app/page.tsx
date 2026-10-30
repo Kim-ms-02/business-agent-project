@@ -13,7 +13,6 @@ import {
   lowGazeLabel,
   measureBaseline,
   notEnoughFaceDetail,
-  scoreFace,
   undetectedLabel,
   type FaceBaseline,
   type FaceResult,
@@ -25,11 +24,20 @@ import {
   deliveryItems,
   deliverySummary,
   formatTime,
-  scoreDelivery,
   silenceLabel,
-  type DeliveryResult,
-  type VoiceRecord,
 } from "@/lib/deliveryScore";
+import {
+  basisLabel,
+  DICTATION_FELL_BACK_NOTE,
+  FILLER_ACCURACY_NOTE,
+  finishRehearsal,
+  NO_DICTATION_PACE_NOTE,
+  NO_DICTATION_SENTENCES_NOTE,
+  sectionForCoach,
+  type RehearsalInput,
+  type RehearsalOutcome,
+} from "@/lib/rehearsalResult";
+import { markLabel } from "@/lib/sentenceMarks";
 import {
   appendTranscript,
   canDictate,
@@ -45,12 +53,13 @@ import type {
   DeliveryFeedback,
   DeliveryFeedbackResult,
   DeliverySummary,
+  FirstFix,
   Question,
+  SentenceMark,
   ReviewResult,
 } from "@/lib/types";
 import {
   answerLabel,
-  countSyllables,
   evaluationLabel,
   feedbackLines,
   inputError,
@@ -580,8 +589,8 @@ type RehearsalStep =
   | { name: "starting" }
   | { name: "running"; startedAt: number }
   | { name: "stopping" }
-  | { name: "askReadToEnd"; record: VoiceRecord; face: FaceResult | null }
-  | { name: "result"; result: DeliveryResult; face: FaceResult | null };
+  | { name: "askReadToEnd"; input: RehearsalInput }
+  | { name: "result"; outcome: RehearsalOutcome };
 
 // The camera is optional. When it is on, the reference pose is measured before the rehearsal starts.
 type CameraState =
@@ -690,18 +699,32 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
     setStep({ name: "stopping" });
     const record = await tracker.current?.stop();
     tracker.current = null;
+    // The frames are kept only until the result is computed, to find low-gaze sentences.
     const face =
-      camera.name === "ready" && faceTracker.current ? scoreFace(faceTracker.current.takeFrames(), camera.baseline) : null;
+      camera.name === "ready" && faceTracker.current
+        ? { frames: faceTracker.current.takeFrames(), baseline: camera.baseline }
+        : null;
     stopCamera();
-    if (record) setStep({ name: "askReadToEnd", record, face });
+    if (record) setStep({ name: "askReadToEnd", input: { script, limitSeconds, record, face, dictation: null } });
     else setStep({ name: "ready", error: null });
   }
 
-  function answerReadToEnd(record: VoiceRecord, face: FaceResult | null, readToEnd: boolean) {
-    const result = scoreDelivery({ record, scriptSyllables: countSyllables(script), limitSeconds, readToEnd });
-    setStep({ name: "result", result, face });
-    if (result.measured) void askCoach({ ...deliverySummary(result), face: faceSummary(face) });
+  function finish(input: RehearsalInput, readToEnd: boolean | null) {
+    const outcome = finishRehearsal(input, readToEnd);
+    setStep({ name: "result", outcome });
+    const summary = coachSummary(outcome);
+    if (summary) void askCoach(summary);
     else setCoach({ name: "none" });
+  }
+
+  /** Scores, reason numbers, and sentence marks for the coach; nothing when speech was too short to score. */
+  function coachSummary(outcome: RehearsalOutcome): DeliverySummary | null {
+    if (!outcome.delivery.measured) return null;
+    return {
+      ...deliverySummary(outcome.delivery),
+      face: faceSummary(outcome.face),
+      section: sectionForCoach(script, outcome.section),
+    };
   }
 
   async function askCoach(summary: DeliverySummary) {
@@ -729,11 +752,11 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   if (step.name === "result") {
     return (
       <DeliveryReport
-        result={step.result}
-        face={step.face}
+        outcome={step.outcome}
         coach={coach}
         onRetryCoach={() => {
-          if (step.result.measured) void askCoach({ ...deliverySummary(step.result), face: faceSummary(step.face) });
+          const summary = coachSummary(step.outcome);
+          if (summary) void askCoach(summary);
         }}
         onAgain={rehearseAgain}
         onRestart={onRestart}
@@ -747,10 +770,10 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         <p className={styles.question}>대본을 끝까지 읽었나요?</p>
         <p className={styles.muted}>말 속도는 대본 전체를 읽었을 때만 잴 수 있어요.</p>
         <div className={styles.actions}>
-          <button className={styles.primary} type="button" onClick={() => answerReadToEnd(step.record, step.face, true)}>
+          <button className={styles.primary} type="button" onClick={() => finish(step.input, true)}>
             예
           </button>
-          <button className={styles.secondary} type="button" onClick={() => answerReadToEnd(step.record, step.face, false)}>
+          <button className={styles.secondary} type="button" onClick={() => finish(step.input, false)}>
             아니요
           </button>
         </div>
@@ -854,20 +877,19 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
 }
 
 function DeliveryReport({
-  result,
-  face,
+  outcome,
   coach,
   onRetryCoach,
   onAgain,
   onRestart,
 }: {
-  result: DeliveryResult;
-  face: FaceResult | null;
+  outcome: RehearsalOutcome;
   coach: CoachState;
   onRetryCoach: () => void;
   onAgain: () => void;
   onRestart: () => void;
 }) {
+  const { delivery: result, face } = outcome;
   return (
     <div className={styles.report}>
       <section className={styles.card}>
@@ -907,12 +929,15 @@ function DeliveryReport({
         )}
       </section>
 
+      <SentenceReport outcome={outcome} />
+
       {face ? <FaceReport face={face} /> : <p className={styles.muted}>{NO_CAMERA_NOTE}</p>}
 
       {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
 
       <p className={styles.muted}>{DESIGN_VALUE_NOTICE}</p>
-      <p className={styles.muted}>{SPEED_LIMIT_NOTICE}</p>
+      {/* With dictation the speed comes from what was said, so the read-as-written caveat does not apply. */}
+      {!outcome.dictationUsed && <p className={styles.muted}>{SPEED_LIMIT_NOTICE}</p>}
       <div className={styles.actions}>
         <button className={styles.primary} type="button" onClick={onAgain}>
           다시 리허설
@@ -951,6 +976,7 @@ function CoachFeedback({ coach, onRetry }: { coach: Exclude<CoachState, { name: 
               {notice}
             </p>
           ))}
+          {coach.feedback.firstFix && <FirstFixView fix={coach.feedback.firstFix} />}
           {coach.feedback.summary && <p>{coach.feedback.summary}</p>}
           {coach.feedback.summaryUnverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
           <ol className={styles.itemList}>
@@ -1010,6 +1036,93 @@ function FaceReport({ face }: { face: FaceResult }) {
       )}
       <p className={styles.muted}>{undetectedLabel(face.undetectedSeconds)}</p>
       <p className={styles.muted}>{FACE_DESIGN_NOTICE}</p>
+    </section>
+  );
+}
+
+function FirstFixView({ fix }: { fix: FirstFix }) {
+  return (
+    <div className={styles.firstFix}>
+      <h3>가장 먼저 고칠 한 가지</h3>
+      {fix.quote && <Quote text={fix.quote} found={fix.quoteFound} />}
+      {fix.unverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
+      <p>{fix.explain}</p>
+      <p className={styles.tryThis}>
+        <strong>다음 리허설 목표</strong> {fix.goal}
+      </p>
+    </div>
+  );
+}
+
+// Each mark has its own color, but the words always say what it is.
+const MARK_STYLE: Record<SentenceMark["kind"], string> = {
+  pause: styles.markPause,
+  lowGaze: styles.markGaze,
+  fast: styles.markFast,
+  skipped: styles.markMissing,
+  unread: styles.markMissing,
+};
+
+function SentenceReport({ outcome }: { outcome: RehearsalOutcome }) {
+  const { section, sentences } = outcome;
+  return (
+    <section className={styles.card}>
+      <h2>문장별로 보기</h2>
+      {outcome.dictationFellBack && <p className={styles.muted}>{DICTATION_FELL_BACK_NOTE}</p>}
+      {section.marks === null ? (
+        <p className={styles.muted}>{NO_DICTATION_SENTENCES_NOTE}</p>
+      ) : (
+        <>
+          <p className={styles.muted}>
+            문장 위치 <span className={styles.basis}>{basisLabel(section.approximate)}</span>
+          </p>
+          <ol className={styles.sentenceList}>
+            {sentences.map((sentence, i) => {
+              const marks = section.marks?.[i] ?? [];
+              return (
+                <li key={i} className={marks.length > 0 ? styles.markedSentence : undefined}>
+                  {marks.length > 0 && (
+                    <span className={styles.markRow}>
+                      {marks.map((mark) => (
+                        <span key={mark.kind} className={`${styles.mark} ${MARK_STYLE[mark.kind]}`}>
+                          {markLabel(mark)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <span>{sentence.text}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
+      {section.quarters ? (
+        <>
+          <h3>구간별 말 속도</h3>
+          <ul className={styles.itemList}>
+            {section.quarters.map((quarter, i) => (
+              <li key={quarter.first}>
+                {i + 1}구간 ({quarter.first + 1}~{quarter.last + 1}번 문장):{" "}
+                {quarter.pace === null ? "말하지 않음" : `분당 ${quarter.pace}음절`}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        section.marks !== null && <p className={styles.muted}>{NO_DICTATION_PACE_NOTE}</p>
+      )}
+      {section.fillers && (
+        <p>
+          군말 {section.fillers.total}번{" "}
+          <span className={styles.tag}>{FILLER_ACCURACY_NOTE}</span>
+          {section.fillers.total > 0 &&
+            `: ${Object.entries(section.fillers.words)
+              .filter(([, count]) => count > 0)
+              .map(([word, count]) => `${word} ${count}`)
+              .join(", ")}`}
+        </p>
+      )}
     </section>
   );
 }

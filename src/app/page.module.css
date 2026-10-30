@@ -288,3 +288,74 @@
   color: var(--warning-text);
   font-weight: 600;
 }
+
+/* v0.4: sentence marks. Color helps, but every mark also says what it is in words. */
+.basis {
+  margin-left: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.875rem;
+}
+
+.sentenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 28px;
+}
+
+.sentenceList li {
+  overflow-wrap: anywhere;
+}
+
+.markedSentence {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.markRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.mark {
+  padding: 1px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.markPause {
+  border-color: var(--warning);
+  color: var(--warning-text);
+}
+
+.markGaze {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.markFast {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.markMissing {
+  border-style: dashed;
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
+.firstFix {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+}
