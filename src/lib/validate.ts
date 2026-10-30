@@ -2,19 +2,19 @@ import { IMPROVEMENT_COUNT, MAX_SUMMARY_SENTENCES, QUESTION_COUNT, STRENGTH_COUN
 import { MAX_ITEM_SCORE } from "./deliveryConfig";
 import {
   CRITERIA,
-  DELIVERY_ITEMS,
   QUESTION_TYPES,
+  REHEARSAL_ITEMS,
   VERDICTS,
   type AnswerEvaluation,
   type AnswerFeedback,
   type CheckedReview,
   type Criterion,
   type DeliveryFeedback,
-  type DeliveryItem,
   type DeliveryItemFeedback,
   type Improvement,
   type Question,
   type QuestionType,
+  type RehearsalItem,
   type Review,
   type ReviewResult,
   type Section,
@@ -294,15 +294,15 @@ export function feedbackLines(feedback: AnswerFeedback): { label: string; text: 
  */
 export function normalizeDeliveryFeedback(
   raw: unknown,
-  scores: ReadonlyMap<DeliveryItem, number | null>,
+  scores: ReadonlyMap<RehearsalItem, number | null>,
 ): DeliveryFeedback | null {
   if (!isRecord(raw) || !Array.isArray(raw.items)) return null;
   const summary = oneSentence(screen(raw.summary));
   if (summary === null) return null;
 
-  const found = new Map<DeliveryItem, DeliveryItemFeedback>();
+  const found = new Map<RehearsalItem, DeliveryItemFeedback>();
   for (const entry of list(raw.items)) {
-    const item = DELIVERY_ITEMS.find((name) => name === text(entry.item));
+    const item = REHEARSAL_ITEMS.find((name) => name === text(entry.item));
     const score = item ? scores.get(item) : undefined;
     if (!item || score === undefined || score === null || found.has(item)) continue;
     const explain = oneSentence(screen(entry.explain));
@@ -310,11 +310,11 @@ export function normalizeDeliveryFeedback(
     if (explain === null || (score !== MAX_ITEM_SCORE && tryThis === null)) continue;
     found.set(item, { item, explain, tryThis });
   }
-  return { summary, items: DELIVERY_ITEMS.flatMap((item) => found.get(item) ?? []) };
+  return { summary, items: REHEARSAL_ITEMS.flatMap((item) => found.get(item) ?? []) };
 }
 
 export function missingDeliveryMessage(count: number): string {
-  return `말투 피드백을 ${count}개 항목에서 받지 못했어요`;
+  return `코치 피드백을 ${count}개 항목에서 받지 못했어요`;
 }
 
 // ---------- Quote check ----------

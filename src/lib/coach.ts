@@ -3,20 +3,25 @@ import { loadSkill } from "./skill";
 import { QUESTION_COUNT } from "./coachConfig";
 import { MAX_ITEM_SCORE, SILENCE_SECONDS } from "./deliveryConfig";
 import { silenceLabel, THREE_ITEM_NOTE } from "./deliveryScore";
+import { MAX_FACE_ITEM_SCORE } from "./faceConfig";
+import { lowGazeLabel } from "./faceScore";
 import {
   CRITERIA,
   DELIVERY_ITEMS,
+  FACE_ITEMS,
   FEEDBACK_FIELDS,
   QUESTION_TYPES,
+  REHEARSAL_ITEMS,
   VERDICTS,
   type AnswerFeedback,
   type AnswerResult,
   type CoachErrorKind,
   type DeliveryFeedback,
   type DeliveryFeedbackResult,
-  type DeliveryItem,
   type DeliverySummary,
+  type FaceSummary,
   type Question,
+  type RehearsalItem,
   type ReviewResult,
 } from "./types";
 import {
@@ -129,7 +134,7 @@ export const ANSWER_TOOL = {
 
 export const DELIVERY_TOOL = {
   name: "submit_delivery_feedback",
-  description: "리허설 말투 점수 피드백을 제출한다.",
+  description: "리허설 말투 점수와 얼굴 행동 점수 피드백을 제출한다.",
   strict: true,
   input_schema: {
     type: "object",
@@ -144,7 +149,7 @@ export const DELIVERY_TOOL = {
           additionalProperties: false,
           required: ["item", "explain", "tryThis"],
           properties: {
-            item: { type: "string", enum: [...DELIVERY_ITEMS] },
+            item: { type: "string", enum: [...REHEARSAL_ITEMS] },
             explain: { type: "string" },
             tryThis: { type: "string" },
           },
@@ -238,6 +243,33 @@ function toDeliveryItem(value: unknown): DeliverySummary["items"][number] | null
   return { item, score, reason };
 }
 
+function toFaceItem(value: unknown): FaceSummary["items"][number] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  const item = FACE_ITEMS.find((name) => name === raw.item);
+  const reason = typeof raw.reason === "string" ? raw.reason.trim() : "";
+  if (!item || !isWhole(raw.score, 0, MAX_FACE_ITEM_SCORE) || reason === "" || reason.length > MAX_REASON_CHARS) {
+    return null;
+  }
+  return { item, score: raw.score, reason };
+}
+
+/** Face scores from the screen: four known items in order, scores 0–4, short reasons, valid low-gaze times. */
+function toFaceSummary(value: unknown): FaceSummary | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  if (!isWhole(raw.total, 0, 100) || !Array.isArray(raw.items) || !Array.isArray(raw.lowGazeWindows)) return null;
+  const items = raw.items.map(toFaceItem);
+  if (items.length !== FACE_ITEMS.length || items.some((i, n) => i?.item !== FACE_ITEMS[n])) return null;
+  const windows = raw.lowGazeWindows.map(toSilence);
+  if (windows.length > MAX_SILENCES || windows.some((w) => w === null)) return null;
+  return {
+    total: raw.total,
+    items: items as FaceSummary["items"],
+    lowGazeWindows: windows as FaceSummary["lowGazeWindows"],
+  };
+}
+
 function toSilence(value: unknown): DeliverySummary["silences"][number] | null {
   if (typeof value !== "object" || value === null) return null;
   const { start, end } = value as Record<string, unknown>;
@@ -265,9 +297,18 @@ export function parseDeliveryInput(body: unknown): { ok: true; input: DeliveryIn
   const silences = raw.silences.map(toSilence);
   if (silences.length > MAX_SILENCES || silences.some((s) => s === null)) return { ok: false, message: BAD_FORMAT };
 
+  // Face scores come only when the camera was on and the face was measured.
+  const face = raw.face === undefined ? undefined : toFaceSummary(raw.face);
+  if (face === null) return { ok: false, message: BAD_FORMAT };
+
   return {
     ok: true,
-    input: { total: raw.total, items: checked, silences: silences as DeliverySummary["silences"] },
+    input: {
+      total: raw.total,
+      items: checked,
+      silences: silences as DeliverySummary["silences"],
+      ...(face ? { face } : {}),
+    },
   };
 }
 
@@ -309,7 +350,10 @@ export function buildAnswerMessage(input: AnswerInput): string {
   return [...blocks, `<script>\n${inert(input.script)}\n</script>`].join("\n\n");
 }
 
-/** The user message for delivery feedback: scored items, reason numbers, and silence times. No script. */
+/**
+ * The user message for rehearsal feedback: scored items, reason numbers, and silence times, then face
+ * scores and low-gaze times when the camera was on. No script, no frames or pictures.
+ */
 export function buildDeliveryMessage(input: DeliveryInput): string {
   const scored = input.items.filter((i) => i.score !== null);
   const note = scored.length < input.items.length ? ` · ${THREE_ITEM_NOTE}` : "";
@@ -320,7 +364,17 @@ export function buildDeliveryMessage(input: DeliveryInput): string {
     ...scored.map((i) => `${i.item}: ${i.score}점 / ${MAX_ITEM_SCORE}점 · ${inert(i.reason)}`),
     `${SILENCE_SECONDS}초 넘게 멈춘 시각: ${silences}`,
   ];
-  return `<delivery>\n${lines.join("\n")}\n</delivery>`;
+  const delivery = `<delivery>\n${lines.join("\n")}\n</delivery>`;
+  if (!input.face) return delivery;
+
+  const { face } = input;
+  const windows = face.lowGazeWindows.length === 0 ? "없음" : face.lowGazeWindows.map(lowGazeLabel).join(", ");
+  const faceLines = [
+    `얼굴 행동 총점: ${face.total}점 (100점 만점)`,
+    ...face.items.map((i) => `${i.item}: ${i.score}점 / ${MAX_FACE_ITEM_SCORE}점 · ${inert(i.reason)}`),
+    `시선이 낮았던 구간: ${windows}`,
+  ];
+  return `${delivery}\n<face>\n${faceLines.join("\n")}\n</face>`;
 }
 
 // ---------- Errors ----------
@@ -469,7 +523,10 @@ async function requestDeliveryFeedback(input: DeliveryInput, create: CreateMessa
   });
   if (response.stop_reason === "refusal") throw new RefusedError();
 
-  const scores = new Map<DeliveryItem, number | null>(input.items.map((i) => [i.item, i.score]));
+  const scores = new Map<RehearsalItem, number | null>([
+    ...input.items.map((i): [RehearsalItem, number | null] => [i.item, i.score]),
+    ...(input.face?.items ?? []).map((i): [RehearsalItem, number | null] => [i.item, i.score]),
+  ]);
   const call = response.content.find((block) => block.type === "tool_use" && block.name === DELIVERY_TOOL.name);
   const feedback = call && "input" in call ? normalizeDeliveryFeedback(call.input, scores) : null;
   if (feedback === null) throw new InvalidResponseError("missing or unusable delivery tool call");
@@ -490,14 +547,14 @@ export async function coachDelivery(
     return { ok: false, kind, message: ERROR_MESSAGES[kind] };
   }
 
-  const expected = input.items.filter((i) => i.score !== null).length;
+  const expected = input.items.filter((i) => i.score !== null).length + (input.face?.items.length ?? 0);
   if (feedback.items.length < expected) {
     const retry = await requestDeliveryFeedback(input, create, model).catch(() => null);
     if (retry) {
       // The first feedback wins; the retry only fills the gaps.
       const have = new Set(feedback.items.map((i) => i.item));
       const items = [...feedback.items, ...retry.items.filter((i) => !have.has(i.item))];
-      feedback = { ...feedback, items: DELIVERY_ITEMS.flatMap((name) => items.find((i) => i.item === name) ?? []) };
+      feedback = { ...feedback, items: REHEARSAL_ITEMS.flatMap((name) => items.find((i) => i.item === name) ?? []) };
     }
   }
 

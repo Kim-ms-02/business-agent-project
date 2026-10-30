@@ -9,6 +9,7 @@ import {
   FACE_PRACTICE_NOTICE,
   NO_CAMERA_NOTE,
   faceItems,
+  faceSummary,
   lowGazeLabel,
   measureBaseline,
   notEnoughFaceDetail,
@@ -696,7 +697,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   function answerReadToEnd(record: VoiceRecord, face: FaceResult | null, readToEnd: boolean) {
     const result = scoreDelivery({ record, scriptSyllables: countSyllables(script), limitSeconds, readToEnd });
     setStep({ name: "result", result, face });
-    if (result.measured) void askCoach(deliverySummary(result));
+    if (result.measured) void askCoach({ ...deliverySummary(result), face: faceSummary(face) });
     else setCoach({ name: "none" });
   }
 
@@ -729,7 +730,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         face={step.face}
         coach={coach}
         onRetryCoach={() => {
-          if (step.result.measured) void askCoach(deliverySummary(step.result));
+          if (step.result.measured) void askCoach({ ...deliverySummary(step.result), face: faceSummary(step.face) });
         }}
         onAgain={rehearseAgain}
         onRestart={onRestart}

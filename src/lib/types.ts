@@ -87,16 +87,33 @@ export type ReviewResult =
 export const DELIVERY_ITEMS = ["말 속도", "침묵", "목소리 크기", "제한 시간"] as const;
 export type DeliveryItem = (typeof DELIVERY_ITEMS)[number];
 
+// The four face behavior items, in the order the result screen shows them.
+export const FACE_ITEMS = ["시선", "표정", "고개 움직임", "화면 안 자세"] as const;
+export type FaceItem = (typeof FACE_ITEMS)[number];
+
+// Everything the coach can give feedback on after a rehearsal, delivery items first.
+export const REHEARSAL_ITEMS = [...DELIVERY_ITEMS, ...FACE_ITEMS] as const;
+export type RehearsalItem = (typeof REHEARSAL_ITEMS)[number];
+
+/** Face scores for coach feedback: scores, reason numbers, and low-gaze times only. No frames or pictures. */
+export interface FaceSummary {
+  total: number;
+  items: { item: FaceItem; score: number; reason: string }[];
+  lowGazeWindows: { start: number; end: number }[];
+}
+
 /** What the screen sends for coach feedback: scores, reason numbers, and silence times only. */
 export interface DeliverySummary {
   total: number;
   items: { item: DeliveryItem; score: number | null; reason: string }[];
   silences: { start: number; end: number }[];
+  /** Only when the camera was on and the face was measured. */
+  face?: FaceSummary;
 }
 
 // tryThis is null for an item with full marks: it only gets a sentence about keeping it up.
 export interface DeliveryItemFeedback {
-  item: DeliveryItem;
+  item: RehearsalItem;
   explain: string;
   tryThis: string | null;
 }
