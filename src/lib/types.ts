@@ -102,6 +102,26 @@ export interface FaceSummary {
   lowGazeWindows: { start: number; end: number }[];
 }
 
+/** What was noticed at one sentence of the script during a rehearsal (v0.4). */
+export type SentenceMark =
+  /** Every pause over three seconds before speech started again in this sentence, in order. */
+  | { kind: "pause"; seconds: number[] }
+  | { kind: "lowGaze" }
+  | { kind: "fast"; pace: number }
+  | { kind: "skipped" }
+  | { kind: "unread" };
+
+/** Sentence marks for coach feedback: the script, marks by sentence number, and quarter paces. No dictated text. */
+export interface SectionSummary {
+  /** True with dictation off: positions are estimated from speaking time. */
+  approximate: boolean;
+  script: string;
+  /** Only sentences with marks; `sentence` is the 0-based index in splitSentences(script). */
+  marks: { sentence: number; marks: SentenceMark[] }[];
+  /** Syllables per minute for each quarter of the script (null: not spoken); dictation on only. */
+  quarters: (number | null)[] | null;
+}
+
 /** What the screen sends for coach feedback: scores, reason numbers, and silence times only. */
 export interface DeliverySummary {
   total: number;
@@ -109,6 +129,8 @@ export interface DeliverySummary {
   silences: { start: number; end: number }[];
   /** Only when the camera was on and the face was measured. */
   face?: FaceSummary;
+  /** Only when sentence marks were made (v0.4). */
+  section?: SectionSummary;
 }
 
 // tryThis is null for an item with full marks: it only gets a sentence about keeping it up.
@@ -120,11 +142,25 @@ export interface DeliveryItemFeedback {
   unverified?: boolean;
 }
 
+/** The one thing to fix first, from the sentence marks (v0.4). */
+export interface FirstFix {
+  /** A sentence of the script, as it is. */
+  quote: string;
+  quoteFound: boolean;
+  explain: string;
+  /** The next rehearsal's goal, with a number in it. */
+  goal: string;
+  /** Set when the explanation still has a number we did not send after asking again. */
+  unverified?: boolean;
+}
+
 export interface DeliveryFeedback {
   /** Empty when every version had a banned word. */
   summary: string;
   summaryUnverified?: boolean;
   items: DeliveryItemFeedback[];
+  /** Only when sentence marks were sent and a usable version came back. */
+  firstFix?: FirstFix;
 }
 
 export type DeliveryFeedbackResult =

@@ -4,6 +4,7 @@ import { LOW_GAZE_RATIO } from "./faceConfig";
 import type { FaceBaseline, FaceFrame } from "./faceScore";
 import { isLookingAtScreen } from "./faceScore";
 import type { ScriptSentence, SentenceReading, TimeWindow, TranscriptChunk } from "./scriptPosition";
+import type { SentenceMark } from "./types";
 import { alignTranscript, dictatedTimeline, estimatedTimeline } from "./scriptPosition";
 import {
   FAST_MIN_SPOKEN_SECONDS,
@@ -17,13 +18,25 @@ import {
 // Works from the stretches of time each sentence was read (scriptPosition's timelines), the speech
 // segments, and optionally the face frames. Labels for the screen are made elsewhere.
 
-export type SentenceMark =
-  /** Every pause over three seconds before speech started again in this sentence, in order. */
-  | { kind: "pause"; seconds: number[] }
-  | { kind: "lowGaze" }
-  | { kind: "fast"; pace: number }
-  | { kind: "skipped" }
-  | { kind: "unread" };
+export type { SentenceMark };
+
+/** The words shown for a mark: never color alone. */
+export function markLabel(mark: SentenceMark): string {
+  switch (mark.kind) {
+    case "pause":
+      return mark.seconds.length === 1
+        ? `멈춤 ${mark.seconds[0]}초`
+        : `멈춤 ${mark.seconds.length}번, ${mark.seconds.map((s) => `${s}초`).join("·")}`;
+    case "lowGaze":
+      return "시선 낮음";
+    case "fast":
+      return "빠름";
+    case "skipped":
+      return "건너뜀";
+    case "unread":
+      return "읽지 않음";
+  }
+}
 
 export interface QuarterPace {
   /** First and last sentence of this quarter of the script. */

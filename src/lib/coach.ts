@@ -5,6 +5,7 @@ import { MAX_ITEM_SCORE, SILENCE_SECONDS } from "./deliveryConfig";
 import { silenceLabel, THREE_ITEM_NOTE } from "./deliveryScore";
 import { MAX_FACE_ITEM_SCORE } from "./faceConfig";
 import { lowGazeLabel } from "./faceScore";
+import { markLabel } from "./sentenceMarks";
 import {
   CRITERIA,
   DELIVERY_ITEMS,
@@ -21,9 +22,12 @@ import {
   type DeliveryItemFeedback,
   type DeliverySummary,
   type FaceSummary,
+  type FirstFix,
   type Question,
   type RehearsalItem,
   type ReviewResult,
+  type SectionSummary,
+  type SentenceMark,
 } from "./types";
 import {
   answerEvaluations,
@@ -36,7 +40,11 @@ import {
   isAnswered,
   missingAnswerMessage,
   bannedWords,
+  FIRST_FIX_MISSING_MESSAGE,
+  hasGoalNumber,
   missingDeliveryMessage,
+  normalizeFirstFix,
+  splitSentences,
   normalizeAnswerFeedback,
   normalizeDeliveryFeedback,
   normalizeReview,
@@ -162,6 +170,29 @@ export const DELIVERY_TOOL = {
   },
 } satisfies Anthropic.Tool;
 
+// With sentence marks the coach also picks the one thing to fix first (v0.4).
+export const SECTION_DELIVERY_TOOL = {
+  ...DELIVERY_TOOL,
+  description: "리허설 말투 점수, 얼굴 행동 점수, 문장별 표시 피드백을 제출한다.",
+  input_schema: {
+    ...DELIVERY_TOOL.input_schema,
+    required: [...DELIVERY_TOOL.input_schema.required, "firstFix"],
+    properties: {
+      ...DELIVERY_TOOL.input_schema.properties,
+      firstFix: {
+        type: "object",
+        additionalProperties: false,
+        required: ["quote", "explain", "goal"],
+        properties: {
+          quote: { type: "string" },
+          explain: { type: "string" },
+          goal: { type: "string" },
+        },
+      },
+    },
+  },
+} satisfies Anthropic.Tool;
+
 // ---------- Input ----------
 
 export interface ReviewInput {
@@ -281,6 +312,68 @@ function toSilence(value: unknown): DeliverySummary["silences"][number] | null {
   return { start, end };
 }
 
+// Generous upper bounds: anything beyond them did not come from the app's own measurements.
+const MAX_PACE = 2000;
+const MAX_PAUSE_SECONDS = 3600;
+const MAX_QUARTERS = 4;
+
+const isPositive = (value: unknown, max: number): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 && value <= max;
+
+/** One mark, rebuilt with only its known fields. Fast, skipped, and unread need dictation. */
+function toSentenceMark(value: unknown, approximate: boolean): SentenceMark | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  switch (raw.kind) {
+    case "pause": {
+      const seconds = raw.seconds;
+      if (!Array.isArray(seconds) || seconds.length === 0 || seconds.length > MAX_SILENCES) return null;
+      return seconds.every((s) => isPositive(s, MAX_PAUSE_SECONDS)) ? { kind: "pause", seconds: [...seconds] } : null;
+    }
+    case "lowGaze":
+      return { kind: "lowGaze" };
+    case "fast":
+      return !approximate && isPositive(raw.pace, MAX_PACE) ? { kind: "fast", pace: raw.pace } : null;
+    case "skipped":
+    case "unread":
+      return approximate ? null : { kind: raw.kind };
+    default:
+      return null;
+  }
+}
+
+/** Sentence marks from the screen: a script, marks on real sentence numbers, and up to four quarter paces. */
+function toSectionSummary(value: unknown): SectionSummary | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.approximate !== "boolean" || typeof raw.script !== "string" || !Array.isArray(raw.marks)) return null;
+  const approximate = raw.approximate;
+  const script = raw.script.trim();
+  if (scriptError(script) !== null) return null;
+
+  const count = splitSentences(script).length;
+  const seen = new Set<number>();
+  const marks: SectionSummary["marks"] = [];
+  for (const entry of raw.marks) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const { sentence, marks: list } = entry as Record<string, unknown>;
+    if (!isWhole(sentence, 0, count - 1) || seen.has(sentence) || !Array.isArray(list) || list.length === 0) return null;
+    const checked = list.map((mark) => toSentenceMark(mark, approximate));
+    if (checked.some((mark) => mark === null)) return null;
+    seen.add(sentence);
+    marks.push({ sentence, marks: checked as SentenceMark[] });
+  }
+
+  let quarters: SectionSummary["quarters"] = null;
+  if (raw.quarters !== null) {
+    const list = raw.quarters;
+    if (approximate || !Array.isArray(list) || list.length === 0 || list.length > MAX_QUARTERS) return null;
+    if (!list.every((pace) => pace === null || isPositive(pace, MAX_PACE))) return null;
+    quarters = [...list] as (number | null)[];
+  }
+  return { approximate, script, marks, quarters };
+}
+
 /** Checks the score summary from the screen: four known items, scores 1–4 or none, short reasons. */
 export function parseDeliveryInput(body: unknown): { ok: true; input: DeliveryInput } | { ok: false; message: string } {
   if (typeof body !== "object" || body === null) return { ok: false, message: BAD_FORMAT };
@@ -303,6 +396,9 @@ export function parseDeliveryInput(body: unknown): { ok: true; input: DeliveryIn
   // Face scores come only when the camera was on and the face was measured.
   const face = raw.face === undefined ? undefined : toFaceSummary(raw.face);
   if (face === null) return { ok: false, message: BAD_FORMAT };
+  // Sentence marks come only when the rehearsal could place them on the script (v0.4).
+  const section = raw.section === undefined ? undefined : toSectionSummary(raw.section);
+  if (section === null) return { ok: false, message: BAD_FORMAT };
 
   return {
     ok: true,
@@ -311,6 +407,7 @@ export function parseDeliveryInput(body: unknown): { ok: true; input: DeliveryIn
       items: checked,
       silences: silences as DeliverySummary["silences"],
       ...(face ? { face } : {}),
+      ...(section ? { section } : {}),
     },
   };
 }
@@ -367,17 +464,42 @@ export function buildDeliveryMessage(input: DeliveryInput): string {
     ...scored.map((i) => `${i.item}: ${i.score}점 / ${MAX_ITEM_SCORE}점 · ${inert(i.reason)}`),
     `${SILENCE_SECONDS}초 넘게 멈춘 시각: ${silences}`,
   ];
-  const delivery = `<delivery>\n${lines.join("\n")}\n</delivery>`;
-  if (!input.face) return delivery;
+  const parts = [`<delivery>\n${lines.join("\n")}\n</delivery>`];
 
-  const { face } = input;
-  const windows = face.lowGazeWindows.length === 0 ? "없음" : face.lowGazeWindows.map(lowGazeLabel).join(", ");
-  const faceLines = [
-    `얼굴 행동 총점: ${face.total}점 (100점 만점)`,
-    ...face.items.map((i) => `${i.item}: ${i.score}점 / ${MAX_FACE_ITEM_SCORE}점 · ${inert(i.reason)}`),
-    `시선이 낮았던 구간: ${windows}`,
+  const { face, section } = input;
+  if (face) {
+    const windows = face.lowGazeWindows.length === 0 ? "없음" : face.lowGazeWindows.map(lowGazeLabel).join(", ");
+    const faceLines = [
+      `얼굴 행동 총점: ${face.total}점 (100점 만점)`,
+      ...face.items.map((i) => `${i.item}: ${i.score}점 / ${MAX_FACE_ITEM_SCORE}점 · ${inert(i.reason)}`),
+      `시선이 낮았던 구간: ${windows}`,
+    ];
+    parts.push(`<face>\n${faceLines.join("\n")}\n</face>`);
+  }
+  if (section) parts.push(sectionMessage(section));
+  return parts.join("\n");
+}
+
+// On the screen a fast mark is just "빠름"; the coach also gets the pace it was measured at.
+function coachMarkLabel(mark: SentenceMark): string {
+  return mark.kind === "fast" ? `${markLabel(mark)}(분당 ${mark.pace}음절)` : markLabel(mark);
+}
+
+/** The script inside tags, then each marked sentence in the script's own words with its marks. */
+function sectionMessage(section: SectionSummary): string {
+  const sentences = splitSentences(section.script);
+  const marked = section.marks.map(
+    (m) => `- "${inert(sentences[m.sentence])}": ${m.marks.map(coachMarkLabel).join(", ")}`,
+  );
+  const lines = [
+    `위치 기준: ${section.approximate ? "대략(말한 시간으로 추정)" : "받아쓰기 기준"}`,
+    ...(marked.length === 0 ? ["표시된 문장: 없음"] : ["표시된 문장:", ...marked]),
   ];
-  return `${delivery}\n<face>\n${faceLines.join("\n")}\n</face>`;
+  if (section.quarters) {
+    const paces = section.quarters.map((pace, i) => `${i + 1}구간 ${pace ?? "없음"}`);
+    lines.push(`구간별 말 속도(분당 음절): ${paces.join(", ")}`);
+  }
+  return `<script>\n${inert(section.script)}\n</script>\n<sentences>\n${lines.join("\n")}\n</sentences>`;
 }
 
 // ---------- Errors ----------
@@ -543,7 +665,7 @@ async function requestDeliveryFeedback(input: DeliveryInput, create: CreateMessa
     model,
     max_tokens: 16000,
     system: loadSkill(),
-    tools: [DELIVERY_TOOL],
+    tools: [input.section ? SECTION_DELIVERY_TOOL : DELIVERY_TOOL],
     tool_choice: { type: "auto" },
     messages: [{ role: "user", content: buildDeliveryMessage(input) }],
   });
@@ -556,7 +678,10 @@ async function requestDeliveryFeedback(input: DeliveryInput, create: CreateMessa
   const call = response.content.find((block) => block.type === "tool_use" && block.name === DELIVERY_TOOL.name);
   const feedback = call && "input" in call ? normalizeDeliveryFeedback(call.input, scores) : null;
   if (feedback === null) throw new InvalidResponseError("missing or unusable delivery tool call");
-  return feedback;
+  if (!input.section || !call || !("input" in call)) return feedback;
+  // A missing or broken first fix is asked for again below rather than failing the whole reply.
+  const firstFix = normalizeFirstFix((call.input as Record<string, unknown>).firstFix, input.section.script);
+  return firstFix ? { ...feedback, firstFix } : feedback;
 }
 
 interface TextCheck {
@@ -572,14 +697,39 @@ function itemText(item: DeliveryItemFeedback): string {
   return `${item.explain} ${item.tryThis ?? ""}`;
 }
 
+// The goal is a target, not a measurement, so its numbers are not checked against what was sent;
+// it is only checked for banned words and for having a number at all. The quote is the script itself.
+function checkFirstFix(fix: FirstFix, sent: string): TextCheck & { noGoalNumber: boolean } {
+  const explain = checkText(fix.explain, sent);
+  return {
+    banned: explain.banned || bannedWords(fix.goal).length > 0,
+    unverified: explain.unverified,
+    noGoalNumber: !hasGoalNumber(fix.goal),
+  };
+}
+
 // Why rehearsal feedback was asked for again, in a fixed order.
-function retryReasons(feedback: DeliveryFeedback, expected: number, sent: string): string[] {
+function retryReasons(feedback: DeliveryFeedback, expected: number, sent: string, wantsFix: boolean): string[] {
   const checks = [feedback.summary, ...feedback.items.map(itemText)].map((text) => checkText(text, sent));
+  const fix = feedback.firstFix ? checkFirstFix(feedback.firstFix, sent) : null;
+  if (fix) checks.push(fix);
   return [
     feedback.items.length < expected ? "빠진 항목" : null,
+    wantsFix && !fix ? "가장 먼저 고칠 것" : null,
     checks.some((c) => c.unverified) ? "숫자" : null,
     checks.some((c) => c.banned) ? "금지어" : null,
+    fix?.noGoalNumber ? "목표 숫자" : null,
   ].filter((reason) => reason !== null);
+}
+
+/** Like choose: a first fix with a goal number and no banned word, preferring one with no unverified number. */
+function chooseFirstFix(replies: DeliveryFeedback[], sent: string): FirstFix | undefined {
+  const usable = replies
+    .flatMap((r) => (r.firstFix ? [{ fix: r.firstFix, ...checkFirstFix(r.firstFix, sent) }] : []))
+    .filter((c) => !c.banned && !c.noGoalNumber);
+  const picked = usable.find((c) => !c.unverified) ?? usable[0];
+  if (!picked) return undefined;
+  return picked.unverified ? { ...picked.fix, unverified: true } : picked.fix;
 }
 
 /** The first version without problems; else the first without a banned word, marked unverified; else none. */
@@ -590,7 +740,7 @@ function choose<T>(versions: T[], textOf: (version: T) => string, sent: string):
 }
 
 /** Combines the first reply and the retry, summary and item by item; the first reply wins when both are fine. */
-function combineFeedback(replies: DeliveryFeedback[], sent: string): DeliveryFeedback {
+function combineFeedback(replies: DeliveryFeedback[], sent: string, wantsFix: boolean): DeliveryFeedback {
   const summary = choose(
     replies.map((r) => r.summary),
     (text) => text,
@@ -605,7 +755,13 @@ function combineFeedback(replies: DeliveryFeedback[], sent: string): DeliveryFee
     if (!picked) return [];
     return [picked.unverified ? { ...picked.value, unverified: true } : picked.value];
   });
-  return { summary: summary?.value ?? "", ...(summary?.unverified ? { summaryUnverified: true } : {}), items };
+  const firstFix = wantsFix ? chooseFirstFix(replies, sent) : undefined;
+  return {
+    summary: summary?.value ?? "",
+    ...(summary?.unverified ? { summaryUnverified: true } : {}),
+    items,
+    ...(firstFix ? { firstFix } : {}),
+  };
 }
 
 /**
@@ -629,11 +785,16 @@ export async function coachDelivery(
 
   const sent = buildDeliveryMessage(input);
   const expected = input.items.filter((i) => i.score !== null).length + (input.face?.items.length ?? 0);
-  const reasons = retryReasons(first, expected, sent);
+  const wantsFix = input.section !== undefined;
+  const reasons = retryReasons(first, expected, sent, wantsFix);
   if (reasons.length > 0) log(`${RETRY_LOG} 리허설 피드백: ${reasons.join(", ")}`);
   const retry = reasons.length > 0 ? await requestDeliveryFeedback(input, create, model).catch(() => null) : null;
-  const feedback = combineFeedback(retry ? [first, retry] : [first], sent);
+  const feedback = combineFeedback(retry ? [first, retry] : [first], sent, wantsFix);
 
   const missing = expected - feedback.items.length;
-  return { ok: true, feedback, notices: missing > 0 ? [missingDeliveryMessage(missing)] : [] };
+  const notices = [
+    ...(missing > 0 ? [missingDeliveryMessage(missing)] : []),
+    ...(wantsFix && !feedback.firstFix ? [FIRST_FIX_MISSING_MESSAGE] : []),
+  ];
+  return { ok: true, feedback, notices };
 }

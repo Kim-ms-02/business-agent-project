@@ -18,6 +18,7 @@ import {
   type Criterion,
   type DeliveryFeedback,
   type DeliveryItemFeedback,
+  type FirstFix,
   type Improvement,
   type Question,
   type QuestionType,
@@ -367,6 +368,28 @@ export function bannedWords(text: string): string[] {
   return FEEDBACK_BANNED_WORDS.filter((word) =>
     (BANNED_WORD_FORMS[word] ?? [word]).some((form) => compact.includes(withoutSpaces(form))),
   );
+}
+
+// ---------- First thing to fix (v0.4 section feedback) ----------
+
+export const FIRST_FIX_MISSING_MESSAGE = "가장 먼저 고칠 한 가지를 받지 못했어요";
+
+/** The next rehearsal's goal must carry a number, so the speaker can tell whether it was met. */
+export function hasGoalNumber(goal: string): boolean {
+  return /\d/.test(goal);
+}
+
+/**
+ * Cleans the first thing to fix. The quote is checked against the script and marked when it is not
+ * there; an empty quote (the fix is about the whole rehearsal) needs no check. Null when unusable.
+ */
+export function normalizeFirstFix(raw: unknown, script: string): FirstFix | null {
+  if (!isRecord(raw)) return null;
+  const quote = typeof raw.quote === "string" ? raw.quote.trim() : "";
+  const explain = screen(raw.explain);
+  const goal = screen(raw.goal);
+  if (explain === null || goal === null) return null;
+  return { quote, quoteFound: quote === "" || quoteExists(script, quote), explain, goal };
 }
 
 export function missingDeliveryMessage(count: number): string {
