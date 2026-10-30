@@ -1023,6 +1023,9 @@ function DeliveryReport({
   const { delivery: result, face } = outcome;
   return (
     <div className={styles.report}>
+      {/* The coach's first thing to fix comes before the scores, so the next step is seen first. */}
+      {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
+
       <section className={styles.card}>
         <h2>말투 점수</h2>
         {result.measured ? (
@@ -1063,8 +1066,6 @@ function DeliveryReport({
       <SentenceReport outcome={outcome} />
 
       {face ? <FaceReport face={face} /> : <p className={styles.muted}>{NO_CAMERA_NOTE}</p>}
-
-      {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
 
       <p className={styles.muted}>{DESIGN_VALUE_NOTICE}</p>
       {/* With dictation the speed comes from what was said, so the read-as-written caveat does not apply. */}
