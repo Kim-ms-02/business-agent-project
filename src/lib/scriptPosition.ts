@@ -191,6 +191,8 @@ export interface ChunkMatch {
   /** First and last sentence the piece matched. */
   first: number;
   last: number;
+  /** Letters matched in each sentence from first to last, for sharing out the piece's speaking time. */
+  letters: number[];
 }
 
 /**
@@ -295,7 +297,11 @@ export function alignTranscript(
     const first = sentenceAt(from);
     const last = sentenceAt(to - 1);
     if (overlaps(dropouts, lastMatchedAt, chunk.at)) markPassedOver(first);
-    matches.push({ chunk: index, first, last });
+    const matched = [];
+    for (let i = first; i <= last; i++) {
+      matched.push(Math.min(to, starts[i] + letters[i].length) - Math.max(from, starts[i]));
+    }
+    matches.push({ chunk: index, first, last, letters: matched });
     readUpTo = last;
     lastMatchedAt = chunk.at;
   });
@@ -308,4 +314,72 @@ export function alignTranscript(
     return unknown.has(i) ? "unknown" : "missed";
   });
   return { sentences: readings, matches };
+}
+
+// ---------- When each sentence was read ----------
+
+/**
+ * Clock times for speaking time `from` to `to`, counted along `segments` (in order): seconds of speech
+ * become stretches of the rehearsal clock, skipping the pauses in between.
+ */
+function spokenToClock(segments: SpeechSegment[], from: number, to: number): TimeWindow[] {
+  const spans: TimeWindow[] = [];
+  let spoken = 0;
+  for (const s of segments) {
+    const length = s.end - s.start;
+    const start = round(s.start + Math.max(0, from - spoken));
+    const end = round(s.start + Math.min(length, to - spoken));
+    if (end > start) spans.push({ start, end });
+    spoken += length;
+  }
+  return spans;
+}
+
+function clip(segments: SpeechSegment[], start: number, end: number): SpeechSegment[] {
+  return segments
+    .map((s) => ({ start: Math.max(start, s.start), end: Math.min(end, s.end) }))
+    .filter((s) => s.end > s.start);
+}
+
+/**
+ * Without dictation: the stretches of the rehearsal when each sentence was being read, taking the whole
+ * script to be read at one steady pace while speaking (the same estimate as estimatePosition).
+ */
+export function estimatedTimeline(sentences: ScriptSentence[], segments: SpeechSegment[]): TimeWindow[][] {
+  const ordered = [...segments].sort((a, b) => a.start - b.start);
+  const totalSyllables = sentences.at(-1)?.to ?? 0;
+  const totalSpoken = spokenUntil(Infinity, ordered);
+  if (totalSyllables === 0 || totalSpoken <= 0) return sentences.map(() => []);
+  const perSyllable = totalSpoken / totalSyllables;
+  return sentences.map((s) =>
+    s.syllables === 0 ? [] : spokenToClock(ordered, round(s.from * perSyllable), round(s.to * perSyllable)),
+  );
+}
+
+/**
+ * With dictation: each matched piece stands for the speech between the piece before it and itself.
+ * That speech is shared out over the sentences the piece matched, by matched letters. Speech in pieces
+ * that matched nothing (improvised) belongs to no sentence; a sentence read twice gets both stretches.
+ */
+export function dictatedTimeline(
+  sentences: ScriptSentence[],
+  chunks: TranscriptChunk[],
+  matches: ChunkMatch[],
+  segments: SpeechSegment[],
+): TimeWindow[][] {
+  const ordered = [...segments].sort((a, b) => a.start - b.start);
+  const timeline: TimeWindow[][] = sentences.map(() => []);
+  for (const match of matches) {
+    const speech = clip(ordered, chunks[match.chunk - 1]?.at ?? 0, chunks[match.chunk].at);
+    const spoken = spokenUntil(Infinity, speech);
+    const total = match.letters.reduce((sum, n) => sum + n, 0);
+    if (spoken <= 0 || total === 0) continue;
+    let before = 0;
+    match.letters.forEach((n, i) => {
+      const from = round((before / total) * spoken);
+      before += n;
+      timeline[match.first + i].push(...spokenToClock(speech, from, round((before / total) * spoken)));
+    });
+  }
+  return timeline;
 }
