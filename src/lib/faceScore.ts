@@ -1,4 +1,5 @@
 import type { Band } from "./deliveryConfig";
+import { formatTime } from "./deliveryScore";
 import {
   BASELINE_MIN_RATIO,
   EXPRESSION_BANDS,
@@ -70,6 +71,10 @@ export type FaceResult =
     };
 
 export const FACE_NOT_ENOUGH_MESSAGE = "측정이 부족해요";
+export const FACE_PRACTICE_NOTICE = "연습용 참고 점수예요. 채점이나 평가에 쓰지 마세요.";
+export const FACE_DESIGN_NOTICE =
+  "얼굴 점수 기준선은 과학적으로 정해진 값이 아니라 이 앱이 정한 설계 값이에요. 감정이나 성격은 판단하지 않아요.";
+export const NO_CAMERA_NOTE = "카메라를 켜지 않아 얼굴 행동 점수는 없어요.";
 export const BASELINE_FAILED_MESSAGE = "얼굴을 찾지 못했어요. 얼굴이 화면 가운데 보이게 한 뒤 다시 재 주세요";
 
 // Ratios built from many floats drift (0.7 can come out as 0.6999…), so values are rounded before
@@ -205,4 +210,35 @@ export function scoreFace(frames: FaceFrame[], baseline: FaceBaseline): FaceResu
     lowGazeWindows: lowGazeWindows(found, baseline, endsAt),
     total: Math.round((sum / (Object.keys(items).length * MAX_FACE_ITEM_SCORE)) * 100),
   };
+}
+
+// ---------- Result screen text ----------
+
+export interface FaceItemRow {
+  label: string;
+  score: string;
+  reason: string;
+}
+
+export function faceItems(result: Extract<FaceResult, { measured: true }>): FaceItemRow[] {
+  const { gaze, expression, head, framing } = result.items;
+  const rows: [string, FaceItemScore][] = [
+    ["시선", gaze],
+    ["표정", expression],
+    ["고개 움직임", head],
+    ["화면 안 자세", framing],
+  ];
+  return rows.map(([label, item]) => ({ label, score: `${item.score} / ${MAX_FACE_ITEM_SCORE}`, reason: item.reason }));
+}
+
+export function lowGazeLabel(window: TimeWindow): string {
+  return `${formatTime(window.start)}~${formatTime(window.end)}`;
+}
+
+export function undetectedLabel(seconds: number): string {
+  return `측정 불가 시간 ${Math.round(seconds)}초`;
+}
+
+export function notEnoughFaceDetail(measuredRatio: number): string {
+  return `얼굴을 찾은 시간이 ${percent(measuredRatio)}예요. 절반 이상 보여야 점수를 낼 수 있어요.`;
 }
