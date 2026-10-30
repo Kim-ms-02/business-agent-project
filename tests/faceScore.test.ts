@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { measureBaseline, scoreFace, type FaceBaseline, type FaceFrame } from "@/lib/faceScore";
+import {
+  FACE_DESIGN_NOTICE,
+  FACE_PRACTICE_NOTICE,
+  NO_CAMERA_NOTE,
+  faceItems,
+  lowGazeLabel,
+  measureBaseline,
+  notEnoughFaceDetail,
+  scoreFace,
+  undetectedLabel,
+  type FaceBaseline,
+  type FaceFrame,
+} from "@/lib/faceScore";
 
 // Fake frame records, one every 0.1 seconds like the face tracker.
 const STEP = 0.1;
@@ -278,5 +290,37 @@ describe("measureBaseline", () => {
 
   it("asks to measure again when nothing was recorded", () => {
     expect(measureBaseline([]).ok).toBe(false);
+  });
+});
+
+describe("result screen text", () => {
+  it("lists the four items in a fixed order with their scores out of 4", () => {
+    const result = measured(rate(frames(10, (_, i) => ({ lookDown: i < 40 ? 0.9 : 0.1 }))));
+    expect(faceItems(result)).toEqual([
+      { label: "시선", score: "3 / 4", reason: result.items.gaze.reason },
+      { label: "표정", score: "1 / 4", reason: result.items.expression.reason },
+      { label: "고개 움직임", score: "2 / 4", reason: result.items.head.reason },
+      { label: "화면 안 자세", score: "4 / 4", reason: result.items.framing.reason },
+    ]);
+  });
+
+  it("says which 10-second stretch had low gaze", () => {
+    expect(lowGazeLabel({ start: 10, end: 20 })).toBe("0분 10초~0분 20초");
+    expect(lowGazeLabel({ start: 60, end: 65.3 })).toBe("1분 0초~1분 5초");
+  });
+
+  it("shows unmeasured time in seconds", () => {
+    expect(undetectedLabel(2)).toBe("측정 불가 시간 2초");
+    expect(undetectedLabel(0.04)).toBe("측정 불가 시간 0초");
+  });
+
+  it("explains why there is no score when the face was found too rarely", () => {
+    expect(notEnoughFaceDetail(0.42)).toBe("얼굴을 찾은 시간이 42%예요. 절반 이상 보여야 점수를 낼 수 있어요.");
+  });
+
+  it("states that the score is for practice only and that the baselines are design values", () => {
+    expect(FACE_PRACTICE_NOTICE).toBe("연습용 참고 점수예요. 채점이나 평가에 쓰지 마세요.");
+    expect(FACE_DESIGN_NOTICE).toContain("설계 값");
+    expect(NO_CAMERA_NOTE).toBe("카메라를 켜지 않아 얼굴 행동 점수는 없어요.");
   });
 });
