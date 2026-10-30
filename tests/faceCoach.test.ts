@@ -37,6 +37,8 @@ const input: DeliveryInput = {
   face,
 };
 
+const withoutFace: DeliveryInput = { total: input.total, items: input.items, silences: input.silences };
+
 const scores = new Map<RehearsalItem, number | null>([
   ...input.items.map((i): [RehearsalItem, number | null] => [i.item, i.score]),
   ...face.items.map((i): [RehearsalItem, number | null] => [i.item, i.score]),
@@ -117,7 +119,6 @@ describe("parseDeliveryInput with face scores", () => {
   });
 
   it("leaves face out when none was sent", () => {
-    const { face: _, ...withoutFace } = input;
     const parsed = parseDeliveryInput(withoutFace);
     expect(parsed.ok && parsed.input.face).toBeUndefined();
   });
@@ -156,7 +157,6 @@ describe("buildDeliveryMessage with face scores", () => {
   });
 
   it("has no face tags when no face scores were sent", () => {
-    const { face: _, ...withoutFace } = input;
     expect(buildDeliveryMessage(withoutFace)).not.toContain("<face>");
   });
 
