@@ -221,3 +221,53 @@ describe("UNVERIFIED_NUMBER_NOTE", () => {
     expect(UNVERIFIED_NUMBER_NOTE).toBe("확인되지 않은 숫자가 있어요");
   });
 });
+
+describe("coachDelivery: retry log for counting", () => {
+  function run(...replies: Anthropic.Message[]) {
+    const create = vi.fn<CreateMessage>();
+    replies.forEach((reply) => create.mockResolvedValueOnce(reply));
+    const log = vi.fn<(line: string) => void>();
+    return { done: coachDelivery(input, create, "m", log), log };
+  }
+
+  it("writes nothing when the feedback is clean", async () => {
+    const { done, log } = run(toolReply(clean));
+    await done;
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("writes one line when items are missing", async () => {
+    const { done, log } = run(toolReply(clean.slice(2)), toolReply(clean));
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 리허설 피드백: 빠진 항목"]]);
+  });
+
+  it("names every reason in one line, in a fixed order", async () => {
+    const messy = replace(replace(clean.slice(1), "침묵", { explain: "긴장해서 멈췄어요." }), "시선", { tryThis: "80%를 목표로." });
+    const { done, log } = run(toolReply(messy), toolReply(clean));
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 리허설 피드백: 빠진 항목, 숫자, 금지어"]]);
+  });
+
+  it("writes a line when the reply is broken, because the screen then asks once more", async () => {
+    const broken = { content: [{ type: "text", text: "그냥 글" }], stop_reason: "end_turn" } as unknown as Anthropic.Message;
+    const { done, log } = run(broken);
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 리허설 피드백: 형식 깨짐"]]);
+  });
+
+  it("does not write the coach's text", async () => {
+    const { done, log } = run(toolReply(replace(clean, "침묵", { explain: "긴장해서 0분 33초에 멈췄어요." })), toolReply(clean));
+    await done;
+    const line = log.mock.calls[0][0];
+    expect(line).not.toContain("긴장");
+    expect(line).not.toContain("33");
+  });
+
+  it("writes nothing for errors that are not asked again, like a refusal", async () => {
+    const refused = { content: [], stop_reason: "refusal" } as unknown as Anthropic.Message;
+    const { done, log } = run(refused);
+    await done;
+    expect(log).not.toHaveBeenCalled();
+  });
+});
