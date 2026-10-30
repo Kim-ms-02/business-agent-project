@@ -52,7 +52,8 @@ function text(value: unknown): string | null {
 }
 
 // Screen text is shown as plain text, so markdown marks would appear as-is.
-const MARKDOWN = /[*#_`~]/g;
+// A single ~ is kept: it joins two times, as in "0분 10초~0분 20초". Only ~~ (strikethrough) is removed.
+const MARKDOWN = /~~|[*#_`]/g;
 // Questions are read aloud, so brackets and other symbols are removed too.
 const SPOKEN_NOISE = /[*#_`~<>[\]{}()]/g;
 
