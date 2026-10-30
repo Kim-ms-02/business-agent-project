@@ -10,6 +10,7 @@ import {
   feedbackLines,
   estimateSeconds,
   findShortages,
+  guidanceCount,
   firstSecondsText,
   inputError,
   isAnswered,
@@ -21,6 +22,7 @@ import {
   shouldAutoRetry,
   shortageMessage,
   splitSentences,
+  tryThisGuidance,
 } from "@/lib/validate";
 
 const script = readFileSync("tests/fixtures/sample-script.txt", "utf8");
@@ -268,6 +270,51 @@ describe("chooseReview: retry once when short", () => {
 
   it("keeps the first when the retry is broken", () => {
     expect(chooseReview(short, null)).toBe(short);
+  });
+});
+
+describe("tryThisGuidance: try-this lines must be words the speaker can say", () => {
+  it.each([
+    "시범 운영 전과 후에 실제로 잰 음식물 쓰레기 양을 숫자로 넣어서, 2주 동안 얼마에서 얼마로 줄었다고 말해 보세요.",
+    "이 문장에 실제로 줄어든 양을 숫자로 넣어 보세요.",
+    "혜택이 아까워서라고 답한 사람의 실제 비율을 숫자로 넣고, 이렇게 말해 보세요. 이 응답은 손실 회피와 잘 맞습니다.",
+    "그리고 이렇게 덧붙여 보세요. 우리 학과 설문 평균을 전국에 적용한 어림값입니다.",
+    "전자 교재를 쓰는 과목을 뺀 학생만 따로 봐도 구매비가 줄었는지 확인해 보세요.",
+    "기술 용어는 줄이고 이렇게 하는 일로 말해 보세요.",
+  ])("finds instructions in %s", (text) => {
+    expect(tryThisGuidance(text)).toBe(true);
+  });
+
+  it.each([
+    "시범 운영 2주 동안 음식물 쓰레기가 앱을 쓰기 전보다 줄었습니다.",
+    "여러분도 지금 휴대폰을 열어 보세요.",
+    "두 구만 비교한 결과라서 쉼터가 환자를 줄였다고 단정하지는 못합니다.",
+  ])("leaves a sentence to say alone: %s", (text) => {
+    expect(tryThisGuidance(text)).toBe(false);
+  });
+
+  it("counts the improvements whose try-this has instructions", () => {
+    const raw = fullRaw();
+    raw.improvements[0].tryThis = "숫자를 넣어 말해 보세요.";
+    raw.improvements[2].tryThis = "출처를 덧붙여 보세요.";
+    expect(guidanceCount(normalizeReview(raw)!)).toBe(2);
+    expect(guidanceCount(normalizeReview(fullRaw())!)).toBe(0);
+  });
+});
+
+describe("chooseReview: retry once when a try-this has instructions", () => {
+  const clean = normalizeReview(fullRaw())!;
+  const guided = { ...clean, improvements: clean.improvements.map((i) => ({ ...i, tryThis: "숫자를 넣어 말해 보세요." })) };
+  const oneGuided = { ...clean, improvements: [guided.improvements[0], ...clean.improvements.slice(1)] };
+
+  it("uses a complete retry with fewer instructions", () => {
+    expect(chooseReview(guided, clean)).toBe(clean);
+    expect(chooseReview(guided, oneGuided)).toBe(oneGuided);
+  });
+
+  it("keeps the complete first review when the retry is no better or is short", () => {
+    expect(chooseReview(oneGuided, guided)).toBe(oneGuided);
+    expect(chooseReview(oneGuided, { ...clean, improvements: clean.improvements.slice(0, 1) })).toBe(oneGuided);
   });
 });
 

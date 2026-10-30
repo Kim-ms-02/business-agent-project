@@ -34,7 +34,7 @@ function reviewInput(improvementCount = 3) {
       criterion: "근거",
       quote: i === 0 ? quotes.c : `대본에 없는 문장 ${i}`,
       problem: "숫자가 없어요.",
-      tryThis: "숫자를 넣어 보세요.",
+      tryThis: "시범 운영 2주 동안 음식물 쓰레기가 앱을 쓰기 전보다 줄었습니다.",
     })),
     questions: [
       { type: "근거", quote: quotes.c, question: "무엇으로 쟀나요?", goodAnswer: "잰 방법", avoidAnswer: "느낌" },
@@ -248,6 +248,23 @@ describe("reviewScript: retry log for counting", () => {
     expect(log.mock.calls).toEqual([["[코치 다시 받기] 대본 평가: 빠진 항목"]]);
   });
 
+  it("asks once more when a try-this line tells the speaker what to do instead of what to say", async () => {
+    const guided = reviewInput();
+    guided.improvements[1].tryThis = "실제로 줄어든 양을 숫자로 넣어 말해 보세요.";
+    const { done, log } = run(toolReply(guided), toolReply(reviewInput()));
+    const result = await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 대본 평가: 말해 보기 안내"]]);
+    expect(result.ok && result.review.improvements[1].tryThis).toBe(reviewInput().improvements[1].tryThis);
+  });
+
+  it("names both reasons when items are missing and a try-this line has guidance", async () => {
+    const both = reviewInput(2);
+    both.improvements[0].tryThis = "이렇게 말해 보세요. 그리고 출처를 덧붙여 보세요.";
+    const { done, log } = run(toolReply(both), toolReply(reviewInput()));
+    await done;
+    expect(log.mock.calls).toEqual([["[코치 다시 받기] 대본 평가: 빠진 항목, 말해 보기 안내"]]);
+  });
+
   it("writes a line when the reply is broken, because the screen then asks once more", async () => {
     const { done, log } = run(message([{ type: "text", text: "그냥 글" }], "end_turn"));
     await done;
@@ -260,3 +277,12 @@ describe("reviewScript: retry log for counting", () => {
     expect(log).not.toHaveBeenCalled();
   });
 });
+
+describe("SKILL.md: try-this lines are only words to say", () => {
+  it("sends instructions about adding numbers to the problem field, not to try-this", () => {
+    const skill = loadSkill();
+    expect(skill).toContain("숫자나 출처를 넣으라는 안내는 무엇이 문제인지(problem)에 쓴다");
+    expect(skill).toMatch(/이렇게 말해 보기[^\n]*피할 말/);
+  });
+});
+
