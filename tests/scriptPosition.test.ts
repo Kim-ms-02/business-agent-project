@@ -201,6 +201,13 @@ describe("toSpokenKorean", () => {
     expect(toSpokenKorean("A안과 B안")).toBe("에이안과 비안");
   });
 
+  it("reads short English words by letter name whatever their case, since dictation may write ai or Ai", () => {
+    expect(toSpokenKorean("ai가")).toBe("에이아이가");
+    expect(toSpokenKorean("Ai가")).toBe("에이아이가");
+    expect(normalizeForMatch("Ai가 알려 줘요")).toBe(normalizeForMatch("에이아이가 알려 줘요"));
+    expect(normalizeForMatch("AI가")).toBe(normalizeForMatch("ai가"));
+  });
+
   it("leaves English said as a word as it is", () => {
     expect(toSpokenKorean("Google 검색")).toBe("Google 검색");
     expect(toSpokenKorean("iPhone")).toBe("iPhone");
@@ -385,8 +392,86 @@ describe("alignTranscript", () => {
     expect(result.sentences.slice(0, 2)).toEqual(["unknown", "unknown"]);
   });
 
+  it("matches an abbreviation dictated in lower case", () => {
+    const heard = chunks(...LINES.slice(0, 3), "ai가 먹을 양을 미리 알려 줍니다", ...LINES.slice(4));
+    expect(alignTranscript(table, heard, []).sentences).toEqual(all("read"));
+  });
+
   it("gives stage directions their own status, so they are never unread", () => {
     const withNote = scriptSentences(`${LINES[0]}\n(웃음)\n${LINES[1]}`);
     expect(alignTranscript(withNote, chunks(LINES[0], LINES[1]), []).sentences).toEqual(["read", "blank", "read"]);
+  });
+});
+
+describe("alignTranscript: finding the place again", () => {
+  const LONG = [
+    "안녕하세요 발표를 시작하겠습니다.",
+    "저희 팀은 학교 식당 문제를 골랐습니다.",
+    "점심시간마다 남는 음식이 너무 많았습니다.",
+    "그래서 학생들에게 직접 물어보았습니다.",
+    "대부분은 양을 고를 수 없어서라고 답했습니다.",
+    "저희는 미리 양을 고르는 방법을 생각했습니다.",
+    "식당 아주머니들도 이 생각을 반겨 주셨습니다.",
+    "두 주 동안 일 학년 교실에서 시험해 보았습니다.",
+    "버려지는 밥의 무게를 매일 저울로 쟀습니다.",
+    "결과를 그래프로 정리해 보여 드리겠습니다.",
+    "첫 주보다 둘째 주에 훨씬 적게 버렸습니다.",
+    "다만 날씨나 메뉴의 영향도 있었을 수 있습니다.",
+    "다음에는 더 오래 시험해 보려고 합니다.",
+    "들어 주셔서 고맙습니다.",
+  ];
+  const longTable = scriptSentences(LONG.join(" "));
+  const heard = (...indexes: (number | string)[]) =>
+    indexes.map((i, n) => ({ text: typeof i === "number" ? LONG[i] : i, at: n * 5 + 4 }));
+
+  it("searches the whole script after three misses in a row, so a skipped paragraph is not the end", () => {
+    // After sentence 2 the speaker jumps to sentence 10: seven sentences skipped, beyond the five looked at.
+    const result = alignTranscript(longTable, heard(0, 1, 9, 10, 11, 12, 13), []);
+    expect(result.sentences.slice(11)).toEqual(["read", "read", "read"]);
+    expect(result.sentences.slice(2, 9)).toEqual(Array(7).fill("missed"));
+    expect(result.matches.find((m) => m.first === 11)).toBeDefined();
+  });
+
+  it("does not search the whole script after only two misses", () => {
+    // Improvised words, then sentence 10: only the second miss, so sentence 10 is not found yet.
+    const result = alignTranscript(longTable, heard(0, "제가 어제 겪은 일인데요 정말 웃겼어요", 9, 10), []);
+    expect(result.sentences[9]).toBe("missed");
+    expect(result.sentences[10]).toBe("read");
+  });
+
+  it("starts counting misses again after a match", () => {
+    const result = alignTranscript(
+      longTable,
+      heard(0, "제가 어제 겪은 일인데요 정말 웃겼어요", "그 친구가 계속 웃어서 저도 웃었어요", 1, 9),
+      [],
+    );
+    expect(result.sentences[1]).toBe("read");
+    expect(result.sentences[9]).toBe("missed");
+  });
+});
+
+describe("alignTranscript: the same sentence twice", () => {
+  const TWICE = [
+    "감사합니다.",
+    "오늘 발표를 시작하겠습니다.",
+    "첫째로 문제를 말씀드리겠습니다.",
+    "둘째로 해결 방법을 보여 드리겠습니다.",
+    "감사합니다.",
+  ];
+  const twiceTable = scriptSentences(TWICE.join(" "));
+  const heard = (...texts: string[]) => texts.map((text, n) => ({ text, at: n * 5 + 4 }));
+
+  it("matches the first one at the start", () => {
+    const result = alignTranscript(twiceTable, heard(TWICE[0]), []);
+    expect(result.matches[0]).toMatchObject({ first: 0, last: 0 });
+  });
+
+  it("matches the nearest one ahead of the current place, not the one behind", () => {
+    const result = alignTranscript(twiceTable, heard(TWICE[0], TWICE[1], "감사합니다"), []);
+    expect(result.matches[2]).toMatchObject({ first: 4, last: 4 });
+  });
+
+  it("marks both as read when the script is read through", () => {
+    expect(alignTranscript(twiceTable, heard(...TWICE), []).sentences).toEqual(TWICE.map(() => "read"));
   });
 });
