@@ -3,6 +3,7 @@ import {
   DICTATION_GAP_SECONDS,
   MATCH_MIN_SIMILARITY,
   MIN_MATCH_LETTERS,
+  MISSES_BEFORE_FULL_SEARCH,
   READ_MIN_COVERAGE,
   SEARCH_AHEAD_SENTENCES,
   SEARCH_BACK_SENTENCES,
@@ -114,17 +115,18 @@ const NUMBER = /(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(\s*%)?/g;
 // "1만", "1천": the 1 is not read before a Korean unit, just as in 만 명.
 const UNIT_AFTER_ONE = /^[십백천만]/;
 
-// Capital words of up to four letters are taken as abbreviations read letter by letter (AI, KTX).
-// Mixed case or longer words (Google, iPhone, UNESCO) are taken as words and left as they are.
-// An all-capital word read as a word (NASA) is misread; matching allows for a few such letters.
-const ABBREVIATION = /(?<![A-Za-z])[A-Z]{1,4}(?![A-Za-z])/g;
+// English words of up to four letters are taken as abbreviations read letter by letter (AI, KTX), whatever
+// their case, since dictation may write "ai" or "Ai" for what the script has as "AI". Longer words
+// (Google, iPhone, UNESCO) are taken as words and left as they are. A short word read as a word
+// (NASA, Zoom, app) is misread; matching allows for a few such letters.
+const ABBREVIATION = /(?<![A-Za-z])[A-Za-z]{1,4}(?![A-Za-z])/g;
 const LETTER_NAMES: Record<string, string> = {
   A: "에이", B: "비", C: "씨", D: "디", E: "이", F: "에프", G: "지", H: "에이치", I: "아이",
   J: "제이", K: "케이", L: "엘", M: "엠", N: "엔", O: "오", P: "피", Q: "큐", R: "알",
   S: "에스", T: "티", U: "유", V: "브이", W: "더블유", X: "엑스", Y: "와이", Z: "제트",
 };
 
-/** Numbers, percents, decimals, and capital abbreviations written out the way they are read. */
+/** Numbers, percents, decimals, and short abbreviations written out the way they are read. */
 export function toSpokenKorean(text: string): string {
   const numbers = text.replace(NUMBER, (match, whole: string, fraction?: string, percent?: string, offset = 0) => {
     const digits = whole.replace(/,/g, "");
@@ -134,7 +136,7 @@ export function toSpokenKorean(text: string): string {
     if (percent) spoken += " 퍼센트";
     return spoken;
   });
-  return numbers.replace(ABBREVIATION, (letters) => [...letters].map((l) => LETTER_NAMES[l]).join(""));
+  return numbers.replace(ABBREVIATION, (letters) => [...letters].map((l) => LETTER_NAMES[l.toUpperCase()]).join(""));
 }
 
 // Hesitation sounds said on their own ("음", "어", "으음", "어어"). Other fillers like "그" or "약간"
@@ -226,6 +228,8 @@ function overlaps(windows: TimeWindow[], start: number, end: number): boolean {
 /**
  * Which sentences were read, from dictated pieces in the order they came. Each piece is looked for from
  * one sentence before the current position to five after it, and moves the position to where it ended.
+ * After MISSES_BEFORE_FULL_SEARCH pieces in a row match nothing there, the piece is looked for in the whole
+ * script. When a piece fits equally well behind and ahead (the same sentence twice), the nearest one ahead wins.
  * Sentences passed over while dictation was down (`dropouts`) are unknown rather than missed.
  */
 export function alignTranscript(
@@ -248,6 +252,24 @@ export function alignTranscript(
   const matches: ChunkMatch[] = [];
   let readUpTo = -1;
   let lastMatchedAt = 0;
+  let misses = 0;
+
+  // The closest part of sentences first..last, as letter positions in the whole script.
+  const closestIn = (heard: string, first: number, last: number) => {
+    const offset = starts[first];
+    const part = closestPart(heard, script.slice(offset, starts[last] + letters[last].length));
+    return { distance: part.distance, from: offset + part.start, to: offset + part.end };
+  };
+  // Looks from `back` sentences before the cursor to `ahead` after it, but takes the part from the cursor
+  // on unless the part behind is strictly closer.
+  const search = (heard: string, cursor: number, back: number, ahead: number) => {
+    const last = Math.min(sentences.length - 1, cursor + ahead);
+    const forward = closestIn(heard, cursor, last);
+    const whole = closestIn(heard, Math.max(0, cursor - back), last);
+    return whole.distance < forward.distance ? whole : forward;
+  };
+  const fits = (heard: string, part: { distance: number; from: number; to: number }) =>
+    part.to > part.from && round(1 - part.distance / heard.length) >= MATCH_MIN_SIMILARITY;
 
   const markPassedOver = (until: number) => {
     for (let i = readUpTo + 1; i < until; i++) unknown.add(i);
@@ -258,15 +280,17 @@ export function alignTranscript(
     if (heard.length < MIN_MATCH_LETTERS || script.length === 0) return;
 
     const cursor = Math.max(0, readUpTo);
-    const fromSentence = Math.max(0, cursor - SEARCH_BACK_SENTENCES);
-    const toSentence = Math.min(sentences.length - 1, cursor + SEARCH_AHEAD_SENTENCES);
-    const windowStart = starts[fromSentence];
-    const windowEnd = starts[toSentence] + letters[toSentence].length;
-    const part = closestPart(heard, script.slice(windowStart, windowEnd));
-    if (part.end <= part.start || round(1 - part.distance / heard.length) < MATCH_MIN_SIMILARITY) return;
+    let part = search(heard, cursor, SEARCH_BACK_SENTENCES, SEARCH_AHEAD_SENTENCES);
+    if (!fits(heard, part) && misses + 1 >= MISSES_BEFORE_FULL_SEARCH) {
+      part = search(heard, cursor, sentences.length, sentences.length);
+    }
+    if (!fits(heard, part)) {
+      misses += 1;
+      return;
+    }
+    misses = 0;
 
-    const from = windowStart + part.start;
-    const to = windowStart + part.end;
+    const { from, to } = part;
     covered.fill(1, from, to);
     const first = sentenceAt(from);
     const last = sentenceAt(to - 1);

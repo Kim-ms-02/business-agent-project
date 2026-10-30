@@ -13,6 +13,12 @@ export const MATCH_MIN_SIMILARITY = 0.6;
 export const SEARCH_BACK_SENTENCES = 1;
 export const SEARCH_AHEAD_SENTENCES = 5;
 
+// After this many pieces in a row match nothing near the current position, the speaker has probably
+// jumped further than five sentences (a whole paragraph skipped, or gone back to the start), so the
+// piece is looked for in the whole script. Fewer would let one stretch of improvised speech jump the
+// position to a look-alike sentence far away; more would leave the position lost for too long.
+export const MISSES_BEFORE_FULL_SEARCH = 3;
+
 // A piece shorter than this many letters (after spaces, punctuation, and hesitation sounds are removed)
 // matches too easily: "감사" fits any closing line. Such a piece never moves the position.
 export const MIN_MATCH_LETTERS = 4;
