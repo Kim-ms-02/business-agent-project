@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   alignTranscript,
+  dictatedTimeline,
+  estimatedTimeline,
   estimatePosition,
   findDropouts,
   normalizeForMatch,
@@ -473,5 +475,84 @@ describe("alignTranscript: the same sentence twice", () => {
 
   it("marks both as read when the script is read through", () => {
     expect(alignTranscript(twiceTable, heard(...TWICE), []).sentences).toEqual(TWICE.map(() => "read"));
+  });
+});
+
+describe("sentence timelines", () => {
+  const TEN = ["학교 급식이 많이 남아요.", "그래서 설문을 해 봤어요.", "결과가 아주 놀라웠어요."];
+  const tenTable = scriptSentences(TEN.join(" "));
+
+  it("estimates when each sentence was read at one steady pace", () => {
+    const two = scriptSentences(TEN.slice(0, 2).join(" "));
+    expect(estimatedTimeline(two, [{ start: 0, end: 10 }])).toEqual([[{ start: 0, end: 5 }], [{ start: 5, end: 10 }]]);
+  });
+
+  it("splits a sentence around a pause in the middle of it", () => {
+    const timeline = estimatedTimeline(tenTable, [
+      { start: 0, end: 6 },
+      { start: 10, end: 16 },
+    ]);
+    expect(timeline).toEqual([
+      [{ start: 0, end: 4 }],
+      [
+        { start: 4, end: 6 },
+        { start: 10, end: 12 },
+      ],
+      [{ start: 12, end: 16 }],
+    ]);
+  });
+
+  it("gives stage directions and a rehearsal with no speech no time", () => {
+    const withNote = scriptSentences(`${TEN[0]} (웃음) ${TEN[1]}`);
+    expect(estimatedTimeline(withNote, [{ start: 0, end: 10 }])[1]).toEqual([]);
+    expect(estimatedTimeline(tenTable, [])).toEqual([[], [], []]);
+  });
+
+  it("times each sentence by the speech before its dictated piece", () => {
+    const chunks = [
+      { text: TEN[0], at: 5 },
+      { text: TEN[1], at: 10 },
+    ];
+    const segments = [
+      { start: 0, end: 4.5 },
+      { start: 5.5, end: 9.5 },
+    ];
+    const { matches } = alignTranscript(tenTable, chunks, []);
+    expect(dictatedTimeline(tenTable, chunks, matches, segments)).toEqual([
+      [{ start: 0, end: 4.5 }],
+      [{ start: 5.5, end: 9.5 }],
+      [],
+    ]);
+  });
+
+  it("splits one piece over two sentences by their letters", () => {
+    const chunks = [{ text: `${TEN[0]} ${TEN[1]}`, at: 10 }];
+    const { matches } = alignTranscript(tenTable, chunks, []);
+    expect(dictatedTimeline(tenTable, chunks, matches, [{ start: 0, end: 10 }]).slice(0, 2)).toEqual([
+      [{ start: 0, end: 5 }],
+      [{ start: 5, end: 10 }],
+    ]);
+  });
+
+  it("leaves improvised speech out of every sentence, and keeps both times of a sentence read twice", () => {
+    const chunks = [
+      { text: TEN[0], at: 5 },
+      { text: "제가 어제 겪은 일인데요 정말 웃겼어요", at: 10 },
+      { text: TEN[0], at: 15 },
+    ];
+    const segments = [
+      { start: 0, end: 4 },
+      { start: 5, end: 9 },
+      { start: 10, end: 14 },
+    ];
+    const { matches } = alignTranscript(tenTable, chunks, []);
+    expect(dictatedTimeline(tenTable, chunks, matches, segments)).toEqual([
+      [
+        { start: 0, end: 4 },
+        { start: 10, end: 14 },
+      ],
+      [],
+      [],
+    ]);
   });
 });
