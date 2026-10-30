@@ -61,6 +61,7 @@ import {
 } from "@/lib/validate";
 import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./page.module.css";
+import DictationDebug from "./DictationDebug";
 import FaceDebug from "./FaceDebug";
 import VoiceDebug from "./VoiceDebug";
 
@@ -309,6 +310,7 @@ export default function Home() {
         <>
           <VoiceDebug />
           <FaceDebug />
+          <DictationDebug script={script} />
         </>
       )}
     </main>
