@@ -45,7 +45,7 @@ function swing(a: number) {
 }
 
 // The speaker's reference pose, measured before the rehearsal. Facing the camera straight on by default.
-const FRONT: FaceBaseline = { yaw: 0, pitch: 0 };
+const FRONT: FaceBaseline = { yaw: 0, pitch: 0, lookDown: 0, lookAway: 0, smile: 0 };
 
 function rate(record: FaceFrame[], baseline: FaceBaseline = FRONT) {
   return scoreFace(record, baseline);
@@ -173,10 +173,10 @@ describe("scoreFace: boundaries", () => {
     ["yaw", { yaw: -14.9 }, true],
     ["pitch", { pitch: -15 }, false],
     ["pitch", { pitch: 14.9 }, true],
-    ["lookDown", { lookDown: 0.5 }, false],
-    ["lookDown", { lookDown: 0.49 }, true],
-    ["lookAway", { lookAway: 0.5 }, false],
-    ["lookAway", { lookAway: 0.49 }, true],
+    ["lookDown", { lookDown: 0.3 }, false],
+    ["lookDown", { lookDown: 0.29 }, true],
+    ["lookAway", { lookAway: 0.3 }, false],
+    ["lookAway", { lookAway: 0.29 }, true],
   ])("counts a frame with %s %o as looking at the screen: %s", (_, frame, looking) => {
     const result = measured(rate(frames(10, () => frame)));
     expect(result.items.gaze.value).toBe(looking ? 1 : 0);
@@ -194,8 +194,9 @@ describe("scoreFace: boundaries", () => {
     expect(result.items.expression.score).toBe(score);
   });
 
-  it("does not count a smile value of exactly 0.3", () => {
-    expect(measured(rate(frames(10, () => ({ smile: 0.3 })))).items.expression.value).toBe(0);
+  it("does not count a smile value of exactly 0.2", () => {
+    expect(measured(rate(frames(10, () => ({ smile: 0.2 })))).items.expression.value).toBe(0);
+    expect(measured(rate(frames(10, () => ({ smile: 0.21 })))).items.expression.value).toBe(1);
   });
 
   it.each([
@@ -247,7 +248,7 @@ describe("scoreFace: reference pose", () => {
   const cameraAbove = frames(10, () => ({ pitch: -20 }));
 
   it("counts looking at the screen from the reference pose, not from facing the camera", () => {
-    expect(measured(rate(cameraAbove, { yaw: 0, pitch: -20 })).items.gaze.value).toBe(1);
+    expect(measured(rate(cameraAbove, { ...FRONT, pitch: -20 })).items.gaze.value).toBe(1);
     expect(measured(rate(cameraAbove, FRONT)).items.gaze.value).toBe(0);
   });
 
@@ -257,13 +258,40 @@ describe("scoreFace: reference pose", () => {
     ["pitch 15 degrees from the reference", { pitch: -25 }, false],
     ["pitch 14.9 degrees from the reference", { pitch: 4.9 }, true],
   ])("with a reference pose of yaw 5 and pitch -10, a frame %s counts as looking: %s", (_, frame, looking) => {
-    const result = measured(rate(frames(10, () => frame), { yaw: 5, pitch: -10 }));
+    const result = measured(rate(frames(10, () => frame), { ...FRONT, yaw: 5, pitch: -10 }));
     expect(result.items.gaze.value).toBe(looking ? 1 : 0);
   });
 
   it("does not change head movement, which only looks at how much the head moves", () => {
     const record = frames(10, swing(5));
-    expect(measured(rate(record, { yaw: 30, pitch: 0 })).items.head.value).toBeCloseTo(5);
+    expect(measured(rate(record, { ...FRONT, yaw: 30 })).items.head.value).toBeCloseTo(5);
+  });
+
+  // A speaker whose eyes read 0.3 down and 0.1 aside while looking at the screen, and whose mouth reads 0.1.
+  const USUAL = { ...FRONT, lookDown: 0.3, lookAway: 0.1, smile: 0.1 };
+
+  it("counts eyes from the reference pose: a usual 0.3 down is looking at the screen", () => {
+    const record = frames(10, () => ({ lookDown: 0.4, lookAway: 0.2 }));
+    expect(measured(rate(record, USUAL)).items.gaze.value).toBe(1);
+    expect(measured(rate(record, FRONT)).items.gaze.value).toBe(0);
+  });
+
+  it.each([
+    ["eyes 0.3 further down", { lookDown: 0.6 }, false],
+    ["eyes 0.29 further down", { lookDown: 0.59 }, true],
+    ["eyes 0.3 further aside", { lookAway: 0.4 }, false],
+    ["eyes 0.29 further aside", { lookAway: 0.39 }, true],
+    ["eyes less down than usual", { lookDown: 0 }, true],
+  ])("with the usual eyes, a frame with %s counts as looking: %s", (_, frame, looking) => {
+    expect(measured(rate(frames(10, () => frame), USUAL)).items.gaze.value).toBe(looking ? 1 : 0);
+  });
+
+  it.each([
+    ["0.2 above the usual mouth", 0.3, 0],
+    ["0.21 above the usual mouth", 0.31, 1],
+    ["below the usual mouth", 0, 0],
+  ])("counts a smile from the reference pose: %s is smiling in %i of frames", (_, smile, value) => {
+    expect(measured(rate(frames(10, () => ({ smile })), USUAL)).items.expression.value).toBe(value);
   });
 });
 
@@ -274,6 +302,19 @@ describe("measureBaseline", () => {
     if (!result.ok) throw new Error("expected a baseline");
     expect(result.baseline.yaw).toBeCloseTo(5, 0);
     expect(result.baseline.pitch).toBeCloseTo(-12);
+  });
+
+  it("also averages the eye and smile values over the frames where the face was found", () => {
+    const record = frames(3, (_, i) =>
+      i % 3 === 0
+        ? { detected: false, lookDown: 0.9, lookAway: 0.9, smile: 0.9 }
+        : { lookDown: i % 2 === 0 ? 0.2 : 0.4, lookAway: 0.1, smile: 0.05 },
+    );
+    const result = measureBaseline(record);
+    if (!result.ok) throw new Error("expected a baseline");
+    expect(result.baseline.lookDown).toBeCloseTo(0.3, 1);
+    expect(result.baseline.lookAway).toBeCloseTo(0.1);
+    expect(result.baseline.smile).toBeCloseTo(0.05);
   });
 
   it("asks to measure again when the face was found in less than half of the frames", () => {
