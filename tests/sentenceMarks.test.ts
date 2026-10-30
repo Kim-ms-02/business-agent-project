@@ -50,7 +50,7 @@ describe("markSentences: pauses", () => {
       timeline: [span(0, 5), span(10, 15)],
     });
     expect(marks[0]).toEqual([]);
-    expect(marks[1]).toEqual([{ kind: "pause", seconds: 5 }]);
+    expect(marks[1]).toEqual([{ kind: "pause", seconds: [5] }]);
   });
 
   it("marks a pause in the middle of a sentence on that sentence", () => {
@@ -69,7 +69,7 @@ describe("markSentences: pauses", () => {
         span(10, 15),
       ],
     });
-    expect(marks[0]).toEqual([{ kind: "pause", seconds: 5 }]);
+    expect(marks[0]).toEqual([{ kind: "pause", seconds: [5] }]);
     expect(marks[1]).toEqual([]);
   });
 
@@ -84,6 +84,29 @@ describe("markSentences: pauses", () => {
       timeline: [span(0, 5), span(8, 13)],
     });
     expect(marks.flat()).toEqual([]);
+  });
+
+  it("puts two pauses in one sentence into one mark, in the order they happened", () => {
+    const marks = markSentences({
+      ...base,
+      sentences: table(30, 10),
+      segments: [
+        { start: 0, end: 2 },
+        { start: 6, end: 8 },
+        { start: 13, end: 15 },
+        { start: 15, end: 20 },
+      ],
+      timeline: [
+        [
+          { start: 0, end: 2 },
+          { start: 6, end: 8 },
+          { start: 13, end: 15 },
+        ],
+        span(15, 20),
+      ],
+    });
+    expect(marks[0]).toEqual([{ kind: "pause", seconds: [4, 5] }]);
+    expect(marks[1]).toEqual([]);
   });
 
   it("does not mark a pause followed by improvised speech, since no sentence was being read", () => {
@@ -163,12 +186,12 @@ describe("markSentences: fast sentences (dictation on)", () => {
   const read = (n: number): SentenceReading[] => Array(n).fill("read");
 
   it("marks a sentence at least 1.2 times the rehearsal pace and over 330 syllables a minute", () => {
-    // 20 syllables in 4 s = 300; in 3 s = 400. Rehearsal pace 300, so 1.2 times is 360.
+    // 25 syllables in 5 s = 300; 40 in 6 s = 400. Rehearsal pace 300, so 1.2 times is 360.
     const marks = markSentences({
       ...base,
-      sentences: table(20, 20),
+      sentences: table(25, 40),
       segments,
-      timeline: [span(0, 4), span(4, 7)],
+      timeline: [span(0, 5), span(5, 11)],
       readings: read(2),
       overallPace: 300,
     });
@@ -177,12 +200,12 @@ describe("markSentences: fast sentences (dictation on)", () => {
   });
 
   it("counts exactly 1.2 times as fast", () => {
-    // 24 syllables in 4 s = 360 = 1.2 × 300.
+    // 30 syllables in 5 s = 360 = 1.2 × 300.
     const marks = markSentences({
       ...base,
-      sentences: table(24),
+      sentences: table(30),
       segments,
-      timeline: [span(0, 4)],
+      timeline: [span(0, 5)],
       readings: read(1),
       overallPace: 300,
     });
@@ -190,24 +213,25 @@ describe("markSentences: fast sentences (dictation on)", () => {
   });
 
   it("does not count exactly 330 syllables a minute as fast", () => {
-    // 22 syllables in 4 s = 330, well over 1.2 × 250 but not over 330.
+    // 33 syllables in 6 s = 330, well over 1.2 × 250 but not over 330.
     const marks = markSentences({
       ...base,
-      sentences: table(22),
+      sentences: table(33),
       segments,
-      timeline: [span(0, 4)],
+      timeline: [span(0, 6)],
       readings: read(1),
       overallPace: 250,
     });
     expect(marks[0]).toEqual([]);
   });
 
-  it("judges a sentence spoken for exactly two seconds, but not a shorter one", () => {
+  it("judges a sentence spoken for exactly five seconds, but not a shorter one, since dictation times can be 1–2 s off", () => {
+    // 50 syllables in 5 s = 600; 49 in 4.9 s would be 600 too, but is too short to trust.
     const marks = markSentences({
       ...base,
-      sentences: table(20, 20),
+      sentences: table(50, 49),
       segments,
-      timeline: [span(0, 2), span(2, 3.9)],
+      timeline: [span(0, 5), span(5, 9.9)],
       readings: read(2),
       overallPace: 300,
     });
@@ -216,7 +240,7 @@ describe("markSentences: fast sentences (dictation on)", () => {
   });
 
   it("gives no fast marks with dictation off", () => {
-    const marks = markSentences({ ...base, sentences: table(20), segments, timeline: [span(0, 2)] });
+    const marks = markSentences({ ...base, sentences: table(50), segments, timeline: [span(0, 5)] });
     expect(marks[0]).toEqual([]);
   });
 });
@@ -338,7 +362,7 @@ describe("sectionFeedback", () => {
   it("with dictation off, marks sentences as approximate, without fast marks or quarter paces", () => {
     const result = sectionFeedback({ sentences, segments, face: null, readToEnd: true, dictation: null });
     expect(result.approximate).toBe(true);
-    expect(result.marks?.[2]).toEqual([{ kind: "pause", seconds: 5 }]);
+    expect(result.marks?.[2]).toEqual([{ kind: "pause", seconds: [5] }]);
     expect(result.marks?.flat().some((m) => m.kind === "fast")).toBe(false);
     expect(result.quarters).toBeNull();
     expect(result.fillers).toBeNull();
@@ -369,7 +393,7 @@ describe("sectionFeedback", () => {
     });
     expect(result.approximate).toBe(false);
     expect(result.marks?.[1]).toEqual([{ kind: "skipped" }]);
-    expect(result.marks?.[2]).toEqual([{ kind: "pause", seconds: 5 }]);
+    expect(result.marks?.[2]).toEqual([{ kind: "pause", seconds: [5] }]);
     expect(result.quarters?.map((q) => q.pace)).toEqual([100, null, 200, 200]);
     expect(result.fillers?.total).toBe(1);
   });
