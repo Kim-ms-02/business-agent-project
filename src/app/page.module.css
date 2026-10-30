@@ -179,6 +179,7 @@
 
 .answerQuestion {
   font-weight: 600;
+  line-height: 1.6;
 }
 
 .report {
@@ -188,25 +189,36 @@
 }
 
 .report h2 {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .report h3 {
-  margin-top: 8px;
-  font-size: 1.0625rem;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .itemList {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding-left: 20px;
+  gap: 20px;
+  padding-left: 22px;
 }
 
 .itemList li {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+}
+
+.itemList li::marker {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .tag {
@@ -216,12 +228,14 @@
 }
 
 .quote {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border-left: 3px solid var(--border);
+  border-radius: 0 4px 4px 0;
+  background: var(--background);
   overflow-wrap: anywhere;
 }
 
-/* Principle 2: a quote not found in the script is shown in yellow. */
+/* Principle 2: a quote not found in the script is shown in yellow, with a sentence that says so. */
 .quoteMissing {
   border-left-color: var(--warning);
   background: var(--warning-surface);
@@ -229,23 +243,42 @@
 
 .quoteNote {
   display: block;
+  margin-top: 4px;
   font-size: 0.875rem;
+  font-weight: 600;
   color: var(--warning-text);
 }
 
+/* What to say or do next: the part a nervous student should see first in each item. */
+.tryThis {
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  background: var(--focus-surface);
+}
+
 .tryThis strong {
-  margin-right: 6px;
+  display: block;
+  font-size: 0.875rem;
+  color: var(--accent);
 }
 
 .details {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+.detailRow {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 12px;
 }
 
 .detailRow dt {
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.95;
   color: var(--muted);
 }
 
@@ -269,6 +302,15 @@
 
   .question {
     font-size: 1.3125rem;
+  }
+
+  .detailRow {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .detailRow dt {
+    line-height: 1.6;
   }
 }
 
