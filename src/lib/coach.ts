@@ -549,11 +549,17 @@ function itemText(item: DeliveryItemFeedback): string {
   return `${item.explain} ${item.tryThis ?? ""}`;
 }
 
-function hasProblem(feedback: DeliveryFeedback, sent: string): boolean {
-  return [feedback.summary, ...feedback.items.map(itemText)].some((text) => {
-    const check = checkText(text, sent);
-    return check.banned || check.unverified;
-  });
+// Why rehearsal feedback was asked for again, in a fixed order. Written to the server log so retries
+// can be counted later; the coach's text itself is never written.
+const RETRY_LOG = "[코치 다시 받기] 리허설 피드백";
+
+function retryReasons(feedback: DeliveryFeedback, expected: number, sent: string): string[] {
+  const checks = [feedback.summary, ...feedback.items.map(itemText)].map((text) => checkText(text, sent));
+  return [
+    feedback.items.length < expected ? "빠진 항목" : null,
+    checks.some((c) => c.unverified) ? "숫자" : null,
+    checks.some((c) => c.banned) ? "금지어" : null,
+  ].filter((reason) => reason !== null);
 }
 
 /** The first version without problems; else the first without a banned word, marked unverified; else none. */
@@ -591,21 +597,23 @@ export async function coachDelivery(
   input: DeliveryInput,
   create: CreateMessage,
   model: string,
+  log: (line: string) => void = console.info,
 ): Promise<DeliveryFeedbackResult> {
   let first: DeliveryFeedback;
   try {
     first = await requestDeliveryFeedback(input, create, model);
   } catch (error) {
     const kind = classifyError(error);
+    // The screen asks once more after a broken reply (shouldAutoRetry).
+    if (kind === "invalid_response") log(`${RETRY_LOG}: 형식 깨짐`);
     return { ok: false, kind, message: ERROR_MESSAGES[kind] };
   }
 
   const sent = buildDeliveryMessage(input);
   const expected = input.items.filter((i) => i.score !== null).length + (input.face?.items.length ?? 0);
-  const retry =
-    first.items.length < expected || hasProblem(first, sent)
-      ? await requestDeliveryFeedback(input, create, model).catch(() => null)
-      : null;
+  const reasons = retryReasons(first, expected, sent);
+  if (reasons.length > 0) log(`${RETRY_LOG}: ${reasons.join(", ")}`);
+  const retry = reasons.length > 0 ? await requestDeliveryFeedback(input, create, model).catch(() => null) : null;
   const feedback = combineFeedback(retry ? [first, retry] : [first], sent);
 
   const missing = expected - feedback.items.length;
