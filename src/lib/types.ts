@@ -116,10 +116,14 @@ export interface DeliveryItemFeedback {
   item: RehearsalItem;
   explain: string;
   tryThis: string | null;
+  /** Set when the text still has a number we did not send after asking again. */
+  unverified?: boolean;
 }
 
 export interface DeliveryFeedback {
+  /** Empty when every version had a banned word. */
   summary: string;
+  summaryUnverified?: boolean;
   items: DeliveryItemFeedback[];
 }
 

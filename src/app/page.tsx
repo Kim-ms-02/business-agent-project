@@ -57,6 +57,7 @@ import {
   isAnswered,
   practiceQuestions,
   shouldAutoRetry,
+  UNVERIFIED_NUMBER_NOTE,
 } from "@/lib/validate";
 import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./page.module.css";
@@ -948,11 +949,13 @@ function CoachFeedback({ coach, onRetry }: { coach: Exclude<CoachState, { name: 
               {notice}
             </p>
           ))}
-          <p>{coach.feedback.summary}</p>
+          {coach.feedback.summary && <p>{coach.feedback.summary}</p>}
+          {coach.feedback.summaryUnverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
           <ol className={styles.itemList}>
             {coach.feedback.items.map((item) => (
               <li key={item.item}>
                 <p className={styles.tag}>{item.item}</p>
+                {item.unverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
                 <p>{item.explain}</p>
                 {item.tryThis && (
                   <p className={styles.tryThis}>

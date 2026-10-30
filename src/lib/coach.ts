@@ -18,6 +18,7 @@ import {
   type CoachErrorKind,
   type DeliveryFeedback,
   type DeliveryFeedbackResult,
+  type DeliveryItemFeedback,
   type DeliverySummary,
   type FaceSummary,
   type Question,
@@ -34,12 +35,14 @@ import {
   inputError,
   isAnswered,
   missingAnswerMessage,
+  bannedWords,
   missingDeliveryMessage,
   normalizeAnswerFeedback,
   normalizeDeliveryFeedback,
   normalizeReview,
   scriptError,
   shortageMessage,
+  unverifiedNumbers,
 } from "./validate";
 
 // Server-only: calls Claude. The coaching wording lives in the skill file, not here.
@@ -533,30 +536,77 @@ async function requestDeliveryFeedback(input: DeliveryInput, create: CreateMessa
   return feedback;
 }
 
-/** Explains the rehearsal scores in words. Missing items are asked for once more. */
+interface TextCheck {
+  banned: boolean;
+  unverified: boolean;
+}
+
+function checkText(text: string, sent: string): TextCheck {
+  return { banned: bannedWords(text).length > 0, unverified: unverifiedNumbers(text, sent).length > 0 };
+}
+
+function itemText(item: DeliveryItemFeedback): string {
+  return `${item.explain} ${item.tryThis ?? ""}`;
+}
+
+function hasProblem(feedback: DeliveryFeedback, sent: string): boolean {
+  return [feedback.summary, ...feedback.items.map(itemText)].some((text) => {
+    const check = checkText(text, sent);
+    return check.banned || check.unverified;
+  });
+}
+
+/** The first version without problems; else the first without a banned word, marked unverified; else none. */
+function choose<T>(versions: T[], textOf: (version: T) => string, sent: string): { value: T; unverified: boolean } | null {
+  const checked = versions.map((value) => ({ value, ...checkText(textOf(value), sent) }));
+  const picked = checked.find((c) => !c.banned && !c.unverified) ?? checked.find((c) => !c.banned);
+  return picked ? { value: picked.value, unverified: picked.unverified } : null;
+}
+
+/** Combines the first reply and the retry, summary and item by item; the first reply wins when both are fine. */
+function combineFeedback(replies: DeliveryFeedback[], sent: string): DeliveryFeedback {
+  const summary = choose(
+    replies.map((r) => r.summary),
+    (text) => text,
+    sent,
+  );
+  const items = REHEARSAL_ITEMS.flatMap((name) => {
+    const picked = choose(
+      replies.flatMap((r) => r.items.filter((i) => i.item === name)),
+      itemText,
+      sent,
+    );
+    if (!picked) return [];
+    return [picked.unverified ? { ...picked.value, unverified: true } : picked.value];
+  });
+  return { summary: summary?.value ?? "", ...(summary?.unverified ? { summaryUnverified: true } : {}), items };
+}
+
+/**
+ * Explains the rehearsal scores in words. Asks once more when items are missing, a number in the text
+ * was not in what we sent, or a banned word judges feelings. A number still unverified after that is
+ * marked; text that still has a banned word is left out.
+ */
 export async function coachDelivery(
   input: DeliveryInput,
   create: CreateMessage,
   model: string,
 ): Promise<DeliveryFeedbackResult> {
-  let feedback: DeliveryFeedback;
+  let first: DeliveryFeedback;
   try {
-    feedback = await requestDeliveryFeedback(input, create, model);
+    first = await requestDeliveryFeedback(input, create, model);
   } catch (error) {
     const kind = classifyError(error);
     return { ok: false, kind, message: ERROR_MESSAGES[kind] };
   }
 
+  const sent = buildDeliveryMessage(input);
   const expected = input.items.filter((i) => i.score !== null).length + (input.face?.items.length ?? 0);
-  if (feedback.items.length < expected) {
-    const retry = await requestDeliveryFeedback(input, create, model).catch(() => null);
-    if (retry) {
-      // The first feedback wins; the retry only fills the gaps.
-      const have = new Set(feedback.items.map((i) => i.item));
-      const items = [...feedback.items, ...retry.items.filter((i) => !have.has(i.item))];
-      feedback = { ...feedback, items: REHEARSAL_ITEMS.flatMap((name) => items.find((i) => i.item === name) ?? []) };
-    }
-  }
+  const retry =
+    first.items.length < expected || hasProblem(first, sent)
+      ? await requestDeliveryFeedback(input, create, model).catch(() => null)
+      : null;
+  const feedback = combineFeedback(retry ? [first, retry] : [first], sent);
 
   const missing = expected - feedback.items.length;
   return { ok: true, feedback, notices: missing > 0 ? [missingDeliveryMessage(missing)] : [] };
