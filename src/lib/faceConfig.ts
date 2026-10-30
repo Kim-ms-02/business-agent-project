@@ -18,16 +18,20 @@ export const MIN_MEASURED_RATIO = 0.5;
 
 // Before the rehearsal the speaker looks at the screen for this long to set the reference pose.
 // A laptop camera sits above the screen, so looking at the screen can read as a lowered head.
+// Eye and mouth values are not 0 on a usual face either (one speaker read 0.3 eyes-down while looking
+// at the screen), so they are measured as well and every face value is judged as a difference from it.
 // If the face was found in less than this share of those frames, the speaker is asked to measure again.
 export const BASELINE_SECONDS = 3;
 export const BASELINE_MIN_RATIO = 0.5;
 
-// Looking at the screen: head within these angles of the reference pose and eyes not lowered or turned aside.
-// 15 degrees allows small natural turns; eye values run 0–1, and 0.5 is a clear look away.
+// Looking at the screen: head within these angles of the reference pose and eyes not lowered or turned aside
+// more than these amounts beyond the reference pose. 15 degrees allows small natural turns.
+// Eye values run 0–1; 0.3 more than usual is a clear look down at the script or to the side,
+// while smaller changes are normal eye movement. Eyes lowered less than usual are not a problem.
 export const LOOK_MAX_YAW = 15;
 export const LOOK_MAX_PITCH = 15;
-export const LOOK_MAX_EYE_DOWN = 0.5;
-export const LOOK_MAX_EYE_AWAY = 0.5;
+export const LOOK_MAX_EYE_DOWN = 0.3;
+export const LOOK_MAX_EYE_AWAY = 0.3;
 
 // Share of frames looking at the screen. Below 10% the speaker was almost always reading.
 export const GAZE_LOWEST_SCORE = 0;
@@ -43,8 +47,9 @@ export const GAZE_BANDS: Band[] = [
 export const LOW_GAZE_WINDOW_SECONDS = 10;
 export const LOW_GAZE_RATIO = 0.5;
 
-// A frame counts as smiling above this mouth-smile value (0–1). Lower values are often a neutral mouth.
-export const SMILE_MIN = 0.3;
+// A frame counts as smiling when the mouth-smile value (0–1) is more than this above the reference pose.
+// Smaller rises are often talking or a neutral mouth rather than a smile.
+export const SMILE_MIN = 0.2;
 
 // Share of frames smiling. A presentation does not need constant smiling, so 15% already scores 4.
 export const EXPRESSION_LOWEST_SCORE = 1;

@@ -112,7 +112,9 @@ export default function FaceDebug() {
           {baseline.name === "measuring" && <p className={styles.speaking}>{BASELINE_PROMPT}</p>}
           {baseline.name === "done" && (
             <p className={styles.note}>
-              기준 자세 {degrees(baseline.baseline.yaw)} / {degrees(baseline.baseline.pitch)}
+              기준 자세 {degrees(baseline.baseline.yaw)} / {degrees(baseline.baseline.pitch)} · 눈 아래{" "}
+              {baseline.baseline.lookDown.toFixed(2)} / 옆 {baseline.baseline.lookAway.toFixed(2)} · 웃음{" "}
+              {baseline.baseline.smile.toFixed(2)}
             </p>
           )}
           {baseline.name === "failed" && <p className={styles.error}>{baseline.message}</p>}

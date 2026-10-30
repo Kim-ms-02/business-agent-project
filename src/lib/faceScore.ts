@@ -42,10 +42,13 @@ export interface FaceFrame {
   faceWidth: number;
 }
 
-/** Average head angle while looking at the screen before the rehearsal. */
+/** Average face values while looking at the screen before the rehearsal. */
 export interface FaceBaseline {
   yaw: number;
   pitch: number;
+  lookDown: number;
+  lookAway: number;
+  smile: number;
 }
 
 export interface FaceItemScore {
@@ -109,9 +112,16 @@ export function measureBaseline(
   if (found.length === 0 || ratio(frames, (f) => f.detected) < BASELINE_MIN_RATIO) {
     return { ok: false, message: BASELINE_FAILED_MESSAGE };
   }
+  const average = (key: keyof FaceBaseline) => round(mean(found.map((f) => f[key])));
   return {
     ok: true,
-    baseline: { yaw: round(mean(found.map((f) => f.yaw))), pitch: round(mean(found.map((f) => f.pitch))) },
+    baseline: {
+      yaw: average("yaw"),
+      pitch: average("pitch"),
+      lookDown: average("lookDown"),
+      lookAway: average("lookAway"),
+      smile: average("smile"),
+    },
   };
 }
 
@@ -119,9 +129,13 @@ export function isLookingAtScreen(frame: FaceFrame, baseline: FaceBaseline): boo
   return (
     round(Math.abs(frame.yaw - baseline.yaw)) < LOOK_MAX_YAW &&
     round(Math.abs(frame.pitch - baseline.pitch)) < LOOK_MAX_PITCH &&
-    frame.lookDown < LOOK_MAX_EYE_DOWN &&
-    frame.lookAway < LOOK_MAX_EYE_AWAY
+    round(frame.lookDown - baseline.lookDown) < LOOK_MAX_EYE_DOWN &&
+    round(frame.lookAway - baseline.lookAway) < LOOK_MAX_EYE_AWAY
   );
+}
+
+export function isSmiling(frame: FaceFrame, baseline: FaceBaseline): boolean {
+  return round(frame.smile - baseline.smile) > SMILE_MIN;
 }
 
 function isWellFramed(frame: FaceFrame): boolean {
@@ -177,7 +191,7 @@ export function scoreFace(frames: FaceFrame[], baseline: FaceBaseline): FaceResu
     reason: `화면을 본 시간 ${percent(gazeRatio)}`,
   };
 
-  const smileRatio = ratio(found, (f) => f.smile > SMILE_MIN);
+  const smileRatio = ratio(found, (f) => isSmiling(f, baseline));
   const expression: FaceItemScore = {
     score: bandScore(smileRatio, EXPRESSION_BANDS, EXPRESSION_LOWEST_SCORE),
     value: smileRatio,
