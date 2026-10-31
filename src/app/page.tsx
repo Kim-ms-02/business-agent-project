@@ -1,1259 +1,208 @@
-"use client";
-
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { QUESTION_COUNT } from "@/lib/coachConfig";
-import { MIN_SPOKEN_SECONDS, SILENCE_SECONDS } from "@/lib/deliveryConfig";
-import { BASELINE_SECONDS } from "@/lib/faceConfig";
-import {
-  FACE_DESIGN_NOTICE,
-  FACE_PRACTICE_NOTICE,
-  NO_CAMERA_NOTE,
-  faceItems,
-  faceSummary,
-  lowGazeLabel,
-  measureBaseline,
-  notEnoughFaceDetail,
-  undetectedLabel,
-  type FaceBaseline,
-  type FaceResult,
-} from "@/lib/faceScore";
-import { BASELINE_PROMPT, CAMERA_NOTICE, startFaceTracker, type FaceTracker } from "@/lib/faceTracker";
-import {
-  DESIGN_VALUE_NOTICE,
-  SPEED_LIMIT_NOTICE,
-  deliveryItems,
-  deliverySummary,
-  formatTime,
-  silenceLabel,
-} from "@/lib/deliveryScore";
-import {
-  basisLabel,
-  DICTATION_FELL_BACK_NOTE,
-  DICTATION_ON_NOTICE,
-  DICTATION_OPTION_LABEL,
-  dictationOptionShown,
-  needsReadToEnd,
-  type DictationRecord,
-  FILLER_ACCURACY_NOTE,
-  finishRehearsal,
-  NO_DICTATION_PACE_NOTE,
-  NO_DICTATION_SENTENCES_NOTE,
-  sectionForCoach,
-  type RehearsalInput,
-  type RehearsalOutcome,
-} from "@/lib/rehearsalResult";
-import { DICTATION_GAP_SECONDS } from "@/lib/sectionConfig";
-import { markLabel } from "@/lib/sentenceMarks";
-import {
-  appendTranscript,
-  canDictate,
-  DICTATION_NOTICE,
-  NO_DICTATION_MESSAGE,
-  speak,
-  startListening,
-} from "@/lib/speech";
-import type {
-  AnswerEvaluation,
-  AnswerResult,
-  CheckedReview,
-  DeliveryFeedback,
-  DeliveryFeedbackResult,
-  DeliverySummary,
-  FirstFix,
-  Question,
-  SentenceMark,
-  ReviewResult,
-} from "@/lib/types";
-import {
-  answerLabel,
-  evaluationLabel,
-  feedbackLines,
-  inputError,
-  isAnswered,
-  practiceQuestions,
-  shouldAutoRetry,
-  UNVERIFIED_NUMBER_NOTE,
-} from "@/lib/validate";
-import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
-import styles from "./page.module.css";
-import DictationDebug from "./DictationDebug";
-import FaceDebug from "./FaceDebug";
-import VoiceDebug from "./VoiceDebug";
+import { SPEED_BANDS } from "@/lib/deliveryConfig";
+import { QUESTION_TYPES, VERDICTS } from "@/lib/types";
+import styles from "./intro.module.css";
+import { READY_PAGES } from "./siteNav";
 
-type Phase =
-  | { name: "input"; error: string | null }
-  | { name: "rehearsal" }
-  | { name: "preparing"; retrying: boolean }
-  | { name: "failed"; message: string }
-  | { name: "practice"; index: number }
-  | { name: "evaluating"; retrying: boolean }
-  | { name: "evaluationFailed"; message: string }
-  | { name: "result"; evaluations: AnswerEvaluation[]; notices: string[] };
+// Intro page (v1.1 step 3), built after docs/design/site-mockup.html. Words that did not match
+// the app were fixed (CLAUDE.md "시안 문구 고치기"); numbers and names come from the app's own settings.
 
-// Kept hidden until the final evaluation screen.
-interface Prepared {
-  review: CheckedReview;
-  notices: string[];
-  estimatedSeconds: number;
-}
-
-const SERVER_UNREACHABLE = "앱 서버에 연결하지 못했어요. 서버가 켜져 있는지 확인하고 다시 시도해 주세요.";
+const [SPEED_LOW, SPEED_HIGH] = SPEED_BANDS[0].ranges[0];
+const rehearsalReady = READY_PAGES.some((page) => page.href === "/rehearsal");
 
 export default function Home() {
-  const [script, setScript] = useState("");
-  const [topic, setTopic] = useState("");
-  const [audience, setAudience] = useState("");
-  const [limitMinutes, setLimitMinutes] = useState("3");
-  const [phase, setPhase] = useState<Phase>({ name: "input", error: null });
-  const [prepared, setPrepared] = useState<Prepared | null>(null);
-  const [answers, setAnswers] = useState<string[]>([]);
-
-  const limitSeconds = Math.round(Number(limitMinutes) * 60);
-
-  async function requestReview(): Promise<ReviewResult> {
-    try {
-      const response = await fetch("/api/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, topic, audience, limitSeconds }),
-      });
-      return (await response.json()) as ReviewResult;
-    } catch {
-      return { ok: false, kind: "unknown", message: SERVER_UNREACHABLE };
-    }
-  }
-
-  async function prepare() {
-    setPhase({ name: "preparing", retrying: false });
-    let result = await requestReview();
-    if (!result.ok && shouldAutoRetry(result.kind, 0)) {
-      setPhase({ name: "preparing", retrying: true });
-      result = await requestReview();
-    }
-
-    if (result.ok) {
-      setPrepared({ review: result.review, notices: result.notices, estimatedSeconds: result.estimatedSeconds });
-      setAnswers(result.review.questions.map(() => ""));
-      setPhase({ name: "practice", index: 0 });
-    } else if (result.kind === "bad_input") {
-      setPhase({ name: "input", error: result.message });
-    } else {
-      setPhase({ name: "failed", message: result.message });
-    }
-  }
-
-  async function requestEvaluation(): Promise<AnswerResult> {
-    try {
-      const response = await fetch("/api/answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, questions: prepared?.review.questions ?? [], answers }),
-      });
-      return (await response.json()) as AnswerResult;
-    } catch {
-      return { ok: false, kind: "unknown", message: SERVER_UNREACHABLE };
-    }
-  }
-
-  async function evaluate() {
-    setPhase({ name: "evaluating", retrying: false });
-    let result = await requestEvaluation();
-    if (!result.ok && shouldAutoRetry(result.kind, 0)) {
-      setPhase({ name: "evaluating", retrying: true });
-      result = await requestEvaluation();
-    }
-
-    if (result.ok) setPhase({ name: "result", evaluations: result.evaluations, notices: result.notices });
-    else setPhase({ name: "evaluationFailed", message: result.message });
-  }
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    // The browser's own bubbles are off (noValidate), so the app shows its message instead.
-    const error = inputError(script, limitSeconds);
-    if (error !== null) setPhase({ name: "input", error });
-    else void prepare();
-  }
-
-  function startRehearsal() {
-    const error = inputError(script, limitSeconds);
-    setPhase(error !== null ? { name: "input", error } : { name: "rehearsal" });
-  }
-
-  function backToInput() {
-    setPrepared(null);
-    setAnswers([]);
-    setPhase({ name: "input", error: null });
-  }
-
-  function setAnswer(index: number, text: string) {
-    setAnswers((current) => current.map((answer, i) => (i === index ? text : answer)));
-  }
-
-  function nextQuestion(index: number) {
-    if (index + 1 < answers.length) setPhase({ name: "practice", index: index + 1 });
-    else void evaluate();
-  }
-
-  const questions = prepared ? practiceQuestions(prepared.review) : [];
-
   return (
     <main className={styles.page}>
-      <header className={styles.header}>
-        <h1>발표 코치</h1>
-        <p>대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 물어봐요. 다 답하면 대본과 답변 평가를 보여 줘요.</p>
-      </header>
-
-      {phase.name === "input" && (
-        <form className={styles.form} onSubmit={handleSubmit} noValidate>
-          <label className={styles.field}>
-            발표 대본
-            <textarea value={script} onChange={(e) => setScript(e.target.value)} />
-          </label>
-          <div className={styles.row}>
-            <label className={styles.field}>
-              주제
-              <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="예: 학교 식당 잔반 줄이기 앱" />
-            </label>
-            <label className={styles.field}>
-              듣는 사람
-              <input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="예: 같은 학과 1학년 학생" />
-            </label>
-          </div>
-          <label className={`${styles.field} ${styles.limit}`}>
-            제한 시간(분)
-            <input
-              type="number"
-              min={0.5}
-              max={60}
-              step={0.5}
-              value={limitMinutes}
-              onChange={(e) => setLimitMinutes(e.target.value)}
-            />
-          </label>
-          {phase.error && (
-            <p className={styles.alert} role="alert">
-              {phase.error}
-            </p>
-          )}
-          <div className={styles.actions}>
-            <button className={styles.primary} type="submit">
-              질문 받기
-            </button>
-            <button className={styles.secondary} type="button" onClick={startRehearsal}>
-              리허설 하기
-            </button>
-          </div>
-        </form>
-      )}
-
-      {phase.name === "rehearsal" && (
-        <Rehearsal script={script} limitSeconds={limitSeconds} onRestart={backToInput} />
-      )}
-
-      {phase.name === "preparing" && (
-        <div className={styles.status} role="status" aria-live="polite">
-          <p>{phase.retrying ? "한 번 더 받아 오는 중이에요" : "질문 준비 중이에요"}</p>
-          <p>잠시만 기다려 주세요.</p>
-        </div>
-      )}
-
-      {phase.name === "failed" && (
-        <div className={styles.form}>
-          <p className={styles.alert} role="alert">
-            {phase.message}
+      <section className={styles.hero} aria-labelledby="intro-title">
+        <div>
+          <p className={styles.eyebrow}>AI 발표 연습 코치</p>
+          <h1 id="intro-title">
+            교수님이 묻기 전에
+            <br />
+            <em>먼저 질문받아</em> 보세요
+          </h1>
+          <p className={styles.lede}>
+            대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 소리로 물어봐요. 다 답하면 대본과 답변을 평가하고,
+            리허설에서는 어느 문장쯤에서 멈췄는지, 카메라를 켜면 시선이 낮았던 문장도 참고로 알려 줘요.
           </p>
-          <div className={styles.actions}>
-            <button className={styles.primary} type="button" onClick={() => void prepare()}>
-              다시 시도
-            </button>
-            <button className={styles.secondary} type="button" onClick={backToInput}>
-              대본 고치기
-            </button>
-          </div>
-        </div>
-      )}
-
-      {phase.name === "practice" && prepared && (
-        <PracticeQuestion
-          key={phase.index}
-          question={questions[phase.index]}
-          index={phase.index}
-          total={questions.length}
-          answer={answers[phase.index]}
-          onAnswerChange={(text) => setAnswer(phase.index, text)}
-          onNext={() => nextQuestion(phase.index)}
-          onRestart={backToInput}
-        />
-      )}
-
-      {phase.name === "evaluating" && (
-        <div className={styles.status} role="status" aria-live="polite">
-          <p>{phase.retrying ? "한 번 더 받아 오는 중이에요" : "답변 평가 중이에요"}</p>
-          <p>잠시만 기다려 주세요.</p>
-        </div>
-      )}
-
-      {phase.name === "evaluationFailed" && (
-        <div className={styles.form}>
-          <p className={styles.alert} role="alert">
-            {phase.message}
-          </p>
-          <div className={styles.actions}>
-            <button className={styles.primary} type="button" onClick={() => void evaluate()}>
-              다시 시도
-            </button>
-            <button className={styles.secondary} type="button" onClick={backToInput}>
-              처음으로
-            </button>
-          </div>
-        </div>
-      )}
-
-      {phase.name === "result" && prepared && (
-        <FinalReport
-          review={prepared.review}
-          reviewNotices={prepared.notices}
-          answers={answers}
-          evaluations={phase.evaluations}
-          answerNotices={phase.notices}
-          onRestart={backToInput}
-        />
-      )}
-
-      {process.env.NODE_ENV === "development" && (
-        <>
-          <VoiceDebug />
-          <FaceDebug />
-          <DictationDebug script={script} />
-        </>
-      )}
-    </main>
-  );
-}
-
-function PracticeQuestion({
-  question,
-  index,
-  total,
-  answer,
-  onAnswerChange,
-  onNext,
-  onRestart,
-}: {
-  question: Pick<Question, "type" | "question">;
-  index: number;
-  total: number;
-  answer: string;
-  onAnswerChange: (text: string) => void;
-  onNext: () => void;
-  onRestart: () => void;
-}) {
-  const [dictationReady] = useState(canDictate);
-  const [listening, setListening] = useState(false);
-  const [interim, setInterim] = useState("");
-  const [speechError, setSpeechError] = useState<string | null>(null);
-  const stopReadingRef = useRef<() => void>(() => {});
-  const stopListeningRef = useRef<(() => void) | null>(null);
-  // Recognized pieces can arrive before the next render, so the latest answer lives in a ref too.
-  const answerRef = useRef(answer);
-
-  useEffect(() => {
-    answerRef.current = answer;
-  }, [answer]);
-
-  useEffect(() => {
-    stopReadingRef.current = speak(question.question);
-    return () => {
-      stopReadingRef.current();
-      stopListeningRef.current?.();
-    };
-  }, [question.question]);
-
-  function readAgain() {
-    stopListeningRef.current?.();
-    stopReadingRef.current = speak(question.question);
-  }
-
-  function startAnswering() {
-    stopReadingRef.current();
-    setSpeechError(null);
-    setListening(true);
-    stopListeningRef.current = startListening({
-      onFinal: (text) => {
-        const next = appendTranscript(answerRef.current, text);
-        answerRef.current = next;
-        onAnswerChange(next);
-      },
-      onInterim: setInterim,
-      onError: setSpeechError,
-      onEnd: () => {
-        setListening(false);
-        setInterim("");
-        stopListeningRef.current = null;
-      },
-    });
-  }
-
-  function stopAnswering() {
-    stopListeningRef.current?.();
-  }
-
-  function answerAgain() {
-    stopAnswering();
-    answerRef.current = "";
-    onAnswerChange("");
-  }
-
-  function goNext() {
-    stopAnswering();
-    stopReadingRef.current();
-    onNext();
-  }
-
-  const isLast = index + 1 === total;
-
-  return (
-    <section className={styles.card} aria-live="polite">
-      <p className={styles.progress}>
-        질문 {index + 1} / {total}
-      </p>
-      <p className={styles.question}>{question.question}</p>
-      <div className={styles.actions}>
-        <button className={styles.secondary} type="button" onClick={readAgain}>
-          다시 듣기
-        </button>
-      </div>
-
-      <label className={styles.field}>
-        내 답
-        <textarea
-          className={styles.answer}
-          value={answer}
-          onChange={(e) => onAnswerChange(e.target.value)}
-          placeholder="말로 답하거나 여기에 글로 써 주세요. 답하지 않고 넘어가도 돼요."
-        />
-      </label>
-      {listening && <p className={styles.muted}>듣는 중이에요{interim ? `: ${interim}` : ""}</p>}
-
-      <div className={styles.actions}>
-        {dictationReady &&
-          (listening ? (
-            <button className={styles.primary} type="button" onClick={stopAnswering}>
-              그만 말하기
-            </button>
-          ) : (
-            <button className={styles.primary} type="button" onClick={startAnswering}>
-              말로 답하기
-            </button>
-          ))}
-        <button className={styles.secondary} type="button" onClick={answerAgain} disabled={!answer && !listening}>
-          다시 답하기
-        </button>
-      </div>
-      <p className={styles.muted}>{dictationReady ? DICTATION_NOTICE : NO_DICTATION_MESSAGE}</p>
-      {speechError && (
-        <p className={styles.alert} role="alert">
-          {speechError}
-        </p>
-      )}
-
-      <div className={styles.actions}>
-        <button className={styles.primary} type="button" onClick={goNext}>
-          {isLast ? "평가 받기" : "다음 질문"}
-        </button>
-        <button className={styles.secondary} type="button" onClick={onRestart}>
-          처음으로
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function Quote({ text, found }: { text: string; found: boolean }) {
-  return (
-    <blockquote className={found ? styles.quote : `${styles.quote} ${styles.quoteMissing}`}>
-      {text}
-      {!found && <span className={styles.quoteNote}>대본에서 찾지 못한 문장이에요. 대본과 비교해 확인해 주세요.</span>}
-    </blockquote>
-  );
-}
-
-function Detail({ label, muted = false, children }: { label: string; muted?: boolean; children: ReactNode }) {
-  return (
-    <div className={styles.detailRow}>
-      <dt>{label}</dt>
-      <dd className={muted ? styles.muted : undefined}>{children}</dd>
-    </div>
-  );
-}
-
-function FinalReport({
-  review,
-  reviewNotices,
-  answers,
-  evaluations,
-  answerNotices,
-  onRestart,
-}: {
-  review: CheckedReview;
-  reviewNotices: string[];
-  answers: string[];
-  evaluations: AnswerEvaluation[];
-  answerNotices: string[];
-  onRestart: () => void;
-}) {
-  return (
-    <div className={styles.report}>
-      <section className={styles.card}>
-        <h2>대본 평가</h2>
-        {reviewNotices.map((notice) => (
-          <p key={notice} className={styles.muted}>
-            {notice}
-          </p>
-        ))}
-        <p>{review.summary}</p>
-
-        <h3>잘한 점</h3>
-        <ol className={styles.itemList}>
-          {review.strengths.map((item) => (
-            <li key={item.quote}>
-              <p className={styles.tag}>{item.criterion}</p>
-              <Quote text={item.quote} found={item.quoteFound} />
-              <p>{item.why}</p>
-            </li>
-          ))}
-        </ol>
-
-        <h3>고칠 점</h3>
-        <ol className={styles.itemList}>
-          {review.improvements.map((item) => (
-            <li key={item.quote}>
-              <p className={styles.tag}>{item.criterion}</p>
-              <Quote text={item.quote} found={item.quoteFound} />
-              <p>{item.problem}</p>
-              <p className={styles.tryThis}>
-                <strong>이렇게 말해 보기</strong> {item.tryThis}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className={styles.card}>
-        <h2>답변 평가</h2>
-        {answerNotices.map((notice) => (
-          <p key={notice} className={styles.muted}>
-            {notice}
-          </p>
-        ))}
-        <ol className={styles.itemList}>
-          {review.questions.map((q, i) => {
-            const evaluation = evaluations[i] ?? { status: "missing" };
-            return (
-              <li key={q.type}>
-                <p className={styles.tag}>
-                  질문 {i + 1} · {q.type}
-                </p>
-                <p className={styles.answerQuestion}>{q.question}</p>
-                <dl className={styles.details}>
-                  <Detail label="내 답" muted={!isAnswered(answers[i])}>
-                    {answerLabel(answers[i])}
-                  </Detail>
-                  <Detail label="판정">
-                    <span className={styles.verdict}>{evaluationLabel(evaluation)}</span>
-                  </Detail>
-                  {evaluation.status === "evaluated" &&
-                    feedbackLines(evaluation.feedback).map((line) => (
-                      <Detail key={line.label} label={line.label}>
-                        {line.text}
-                      </Detail>
-                    ))}
-                  <Detail label="좋은 답의 방향">{q.goodAnswer}</Detail>
-                  <Detail label="피할 답">{q.avoidAnswer}</Detail>
-                </dl>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
-      <p className={styles.muted}>이 평가는 연습을 돕는 참고 의견이에요. 맞는지는 직접 판단해 주세요.</p>
-      <div className={styles.actions}>
-        <button className={styles.secondary} type="button" onClick={onRestart}>
-          처음으로
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const REHEARSAL_NOTICE = "리허설 소리는 받아쓰지 않고, 저장하지도 브라우저 밖으로 보내지도 않아요.";
-
-type RehearsalStep =
-  | { name: "ready"; error: string | null }
-  | { name: "starting" }
-  | { name: "running"; startedAt: number }
-  | { name: "stopping" }
-  | { name: "askReadToEnd"; input: RehearsalInput }
-  | { name: "result"; outcome: RehearsalOutcome };
-
-// The camera is optional. When it is on, the reference pose is measured before the rehearsal starts.
-type CameraState =
-  | { name: "off" }
-  | { name: "starting" }
-  | { name: "measuring" }
-  | { name: "ready"; baseline: FaceBaseline }
-  | { name: "baselineFailed"; message: string }
-  | { name: "failed"; message: string };
-
-type CoachState =
-  | { name: "none" }
-  | { name: "loading"; retrying: boolean }
-  | { name: "failed"; message: string }
-  | { name: "done"; feedback: DeliveryFeedback; notices: string[] };
-
-// Rehearsal dictation (v0.4, only when the speaker turns it on). The dictated text stays in this
-// browser tab: it is used to place sentences and count speed, and is dropped with the result.
-interface DictationSession {
-  record: DictationRecord;
-  /** performance.now() when the rehearsal clock started. */
-  startedAt: number;
-  lastHeard: number;
-  active: boolean;
-  stopCurrent: (() => void) | null;
-  watchdog: ReturnType<typeof setInterval> | null;
-  ended: (() => void) | null;
-}
-
-// After "끝", dictation may still send the last piece; wait this long at most.
-const DICTATION_FLUSH_MS = 2000;
-
-async function requestDeliveryFeedback(summary: DeliverySummary): Promise<DeliveryFeedbackResult> {
-  try {
-    const response = await fetch("/api/delivery", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(summary),
-    });
-    return (await response.json()) as DeliveryFeedbackResult;
-  } catch {
-    return { ok: false, kind: "unknown", message: SERVER_UNREACHABLE };
-  }
-}
-
-function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitSeconds: number; onRestart: () => void }) {
-  const [step, setStep] = useState<RehearsalStep>({ name: "ready", error: null });
-  const [speaking, setSpeaking] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-  const [coach, setCoach] = useState<CoachState>({ name: "none" });
-  const [camera, setCamera] = useState<CameraState>({ name: "off" });
-  const [faceSeen, setFaceSeen] = useState(true);
-  // The option is only offered in Chrome and Edge. This screen is only shown in the browser.
-  const [dictationAvailable] = useState(
-    () => typeof navigator !== "undefined" && dictationOptionShown(navigator.userAgent, canDictate()),
-  );
-  const [dictationOn, setDictationOn] = useState(false);
-  const [dictationError, setDictationError] = useState<string | null>(null);
-  const dictation = useRef<DictationSession | null>(null);
-  const speakingNow = useRef(false);
-  const tracker = useRef<VoiceTracker | null>(null);
-  const faceTracker = useRef<FaceTracker | null>(null);
-  const video = useRef<HTMLVideoElement>(null);
-  // A reply for an earlier rehearsal is ignored once a new one has started.
-  const coachRequest = useRef(0);
-
-  // Turn the microphone and camera off if the speaker leaves in the middle of a rehearsal.
-  useEffect(
-    () => () => {
-      void tracker.current?.stop();
-      faceTracker.current?.stop();
-      void stopDictation();
-    },
-    [],
-  );
-
-  function startDictation(startedAt: number) {
-    const session: DictationSession = {
-      record: { chunks: [], activity: [] },
-      startedAt,
-      lastHeard: performance.now(),
-      active: true,
-      stopCurrent: null,
-      watchdog: null,
-      ended: null,
-    };
-    const heard = () => {
-      const now = performance.now();
-      session.lastHeard = now;
-      const at = Math.round((now - session.startedAt) / 100) / 10;
-      session.record.activity.push(at);
-      return at;
-    };
-    const listen = () => {
-      session.stopCurrent = startListening({
-        onInterim: (text) => {
-          if (text.trim()) heard();
-        },
-        onFinal: (text) => {
-          const at = heard();
-          if (text.trim()) session.record.chunks.push({ text, at });
-        },
-        // A real error (for example, the microphone is blocked) stops dictation; the rehearsal goes on.
-        onError: (message) => {
-          session.active = false;
-          setDictationError(message);
-        },
-        // Chrome ends dictation on its own after a while; keep it going during the rehearsal.
-        onEnd: () => {
-          if (session.active) listen();
-          else session.ended?.();
-        },
-      });
-    };
-    // Speaking with no dictation for a while means it stalled: restart it.
-    session.watchdog = setInterval(() => {
-      const now = performance.now();
-      if (session.active && speakingNow.current && now - session.lastHeard > DICTATION_GAP_SECONDS * 1000) {
-        session.lastHeard = now;
-        session.stopCurrent?.();
-      }
-    }, 1000);
-    dictation.current = session;
-    listen();
-  }
-
-  /** Stops dictation and waits briefly for the last piece. Null when dictation was off. */
-  async function stopDictation(): Promise<DictationRecord | null> {
-    const session = dictation.current;
-    dictation.current = null;
-    if (!session) return null;
-    if (session.watchdog) clearInterval(session.watchdog);
-    const wasActive = session.active;
-    session.active = false;
-    if (wasActive) {
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, DICTATION_FLUSH_MS);
-        session.ended = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-        session.stopCurrent?.();
-      });
-    }
-    return session.record;
-  }
-
-  async function startCamera() {
-    if (!video.current) return;
-    setCamera({ name: "starting" });
-    const result = await startFaceTracker(video.current, (frame) => setFaceSeen(frame.detected));
-    if (!result.ok) {
-      setCamera({ name: "failed", message: result.message });
-      return;
-    }
-    faceTracker.current = result.tracker;
-    measurePose();
-  }
-
-  function measurePose() {
-    const current = faceTracker.current;
-    if (!current) return;
-    current.takeFrames();
-    setCamera({ name: "measuring" });
-    setTimeout(() => {
-      // The camera may have been turned off while measuring.
-      if (faceTracker.current !== current) return;
-      const result = measureBaseline(current.takeFrames());
-      setCamera(result.ok ? { name: "ready", baseline: result.baseline } : { name: "baselineFailed", message: result.message });
-    }, BASELINE_SECONDS * 1000);
-  }
-
-  function stopCamera() {
-    faceTracker.current?.stop();
-    faceTracker.current = null;
-    setCamera({ name: "off" });
-  }
-
-  useEffect(() => {
-    if (step.name !== "running") return;
-    const timer = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(timer);
-  }, [step.name]);
-
-  async function start() {
-    setStep({ name: "starting" });
-    setSpeaking(false);
-    setDictationError(null);
-    const result = await startVoiceTracker("rehearsal", (live) => {
-      setSpeaking(live.speaking);
-      speakingNow.current = live.speaking;
-    });
-    if (!result.ok) {
-      setStep({ name: "ready", error: result.message });
-      return;
-    }
-    tracker.current = result.tracker;
-    // Face frames and dictation times from now on belong to the rehearsal; the reference pose seconds are left out.
-    faceTracker.current?.takeFrames();
-    if (dictationOn) startDictation(performance.now());
-    setFaceSeen(true);
-    setNow(Date.now());
-    setStep({ name: "running", startedAt: Date.now() });
-  }
-
-  async function stop() {
-    setStep({ name: "stopping" });
-    const [record, dictated] = await Promise.all([tracker.current?.stop(), stopDictation()]);
-    tracker.current = null;
-    // The frames are kept only until the result is computed, to find low-gaze sentences.
-    const face =
-      camera.name === "ready" && faceTracker.current
-        ? { frames: faceTracker.current.takeFrames(), baseline: camera.baseline }
-        : null;
-    stopCamera();
-    if (!record) {
-      setStep({ name: "ready", error: null });
-      return;
-    }
-    const input: RehearsalInput = { script, limitSeconds, record, face, dictation: dictated };
-    // With dictation the reading is known, so "대본을 끝까지 읽었나요?" is not asked.
-    if (needsReadToEnd(dictated)) setStep({ name: "askReadToEnd", input });
-    else finish(input, null);
-  }
-
-  function finish(input: RehearsalInput, readToEnd: boolean | null) {
-    const outcome = finishRehearsal(input, readToEnd);
-    setStep({ name: "result", outcome });
-    const summary = coachSummary(outcome);
-    if (summary) void askCoach(summary);
-    else setCoach({ name: "none" });
-  }
-
-  /** Scores, reason numbers, and sentence marks for the coach; nothing when speech was too short to score. */
-  function coachSummary(outcome: RehearsalOutcome): DeliverySummary | null {
-    if (!outcome.delivery.measured) return null;
-    return {
-      ...deliverySummary(outcome.delivery),
-      face: faceSummary(outcome.face),
-      section: sectionForCoach(script, outcome.section),
-    };
-  }
-
-  async function askCoach(summary: DeliverySummary) {
-    const id = ++coachRequest.current;
-    setCoach({ name: "loading", retrying: false });
-    let result = await requestDeliveryFeedback(summary);
-    if (!result.ok && shouldAutoRetry(result.kind, 0) && id === coachRequest.current) {
-      setCoach({ name: "loading", retrying: true });
-      result = await requestDeliveryFeedback(summary);
-    }
-    if (id !== coachRequest.current) return;
-    setCoach(
-      result.ok
-        ? { name: "done", feedback: result.feedback, notices: result.notices }
-        : { name: "failed", message: result.message },
-    );
-  }
-
-  function rehearseAgain() {
-    coachRequest.current += 1;
-    setCoach({ name: "none" });
-    setStep({ name: "ready", error: null });
-  }
-
-  if (step.name === "result") {
-    return (
-      <DeliveryReport
-        outcome={step.outcome}
-        coach={coach}
-        onRetryCoach={() => {
-          const summary = coachSummary(step.outcome);
-          if (summary) void askCoach(summary);
-        }}
-        onAgain={rehearseAgain}
-        onRestart={onRestart}
-      />
-    );
-  }
-
-  if (step.name === "askReadToEnd") {
-    return (
-      <section className={styles.card}>
-        <p className={styles.question}>대본을 끝까지 읽었나요?</p>
-        <p className={styles.muted}>말 속도는 대본 전체를 읽었을 때만 잴 수 있어요.</p>
-        <div className={styles.actions}>
-          <button className={styles.primary} type="button" onClick={() => finish(step.input, true)}>
-            예
-          </button>
-          <button className={styles.secondary} type="button" onClick={() => finish(step.input, false)}>
-            아니요
-          </button>
-        </div>
-      </section>
-    );
-  }
-
-  const running = step.name === "running";
-  const elapsed = running ? Math.max(0, (now - step.startedAt) / 1000) : 0;
-  const cameraOn = camera.name !== "off" && camera.name !== "failed";
-  // With the camera on, the rehearsal waits for a usable reference pose (or for the camera to be turned off).
-  const cameraBlocksStart = camera.name === "starting" || camera.name === "measuring" || camera.name === "baselineFailed";
-
-  return (
-    <section className={styles.card}>
-      <h2>리허설</h2>
-      {running || step.name === "stopping" ? (
-        <p className={styles.rehearsalStatus} aria-live="polite">
-          <span>
-            {formatTime(elapsed)} / 제한 {formatTime(limitSeconds)}
-          </span>
-          <span className={speaking ? styles.speaking : styles.muted}>{speaking ? "말하는 중" : "조용함"}</span>
-          {dictationOn && <span className={styles.muted}>받아쓰기 켜짐</span>}
-        </p>
-      ) : (
-        <p className={styles.muted}>
-          &quot;리허설 시작&quot;을 누르고 대본을 보며 소리 내어 발표해 주세요. 다 끝나면 &quot;끝&quot;을 눌러 주세요.
-        </p>
-      )}
-      {step.name === "ready" && step.error && (
-        <p className={styles.alert} role="alert">
-          {step.error}
-        </p>
-      )}
-      {dictationError && (
-        <p className={styles.warningText} role="alert">
-          받아쓰기가 멈췄어요: {dictationError}
-        </p>
-      )}
-
-      <div className={styles.cameraBox}>
-        <video
-          ref={video}
-          className={running ? `${styles.cameraPreview} ${styles.cameraSmall}` : styles.cameraPreview}
-          muted
-          playsInline
-          hidden={!cameraOn}
-        />
-        {running ? (
-          camera.name === "ready" && !faceSeen && <p className={styles.warningText}>얼굴이 안 보여요</p>
-        ) : (
-          <div className={styles.cameraControls}>
-            <p className={styles.muted}>카메라 (선택): {CAMERA_NOTICE}</p>
-            {camera.name === "measuring" && <p className={styles.speaking}>{BASELINE_PROMPT}</p>}
-            {camera.name === "ready" && <p className={styles.muted}>기준 자세를 쟀어요. 이제 리허설을 시작해 주세요.</p>}
-            {(camera.name === "failed" || camera.name === "baselineFailed") && (
-              <p className={styles.alert} role="alert">
-                {camera.message}
-              </p>
+          <div className={styles.ctas}>
+            <Link className={styles.primary} href="/practice">
+              질문 연습 시작
+            </Link>
+            {rehearsalReady && (
+              <Link className={styles.secondary} href="/rehearsal">
+                리허설 하기
+              </Link>
             )}
-            <div className={styles.actions}>
-              {cameraOn ? (
-                <>
-                  {(camera.name === "ready" || camera.name === "baselineFailed") && (
-                    <button className={styles.secondary} type="button" onClick={measurePose}>
-                      기준 자세 다시 재기
-                    </button>
-                  )}
-                  <button className={styles.secondary} type="button" onClick={stopCamera} disabled={step.name === "starting"}>
-                    카메라 끄기
-                  </button>
-                </>
-              ) : (
-                <button className={styles.secondary} type="button" onClick={() => void startCamera()}>
-                  카메라 켜기
-                </button>
-              )}
-            </div>
           </div>
-        )}
-      </div>
-
-      {dictationAvailable && !running && step.name !== "stopping" && (
-        <label className={styles.checkRow}>
-          <input
-            type="checkbox"
-            checked={dictationOn}
-            onChange={(event) => setDictationOn(event.target.checked)}
-            disabled={step.name === "starting"}
-          />
-          {DICTATION_OPTION_LABEL}
-        </label>
-      )}
-
-      <div className={styles.scriptView}>{script}</div>
-
-      <div className={styles.actions}>
-        {running || step.name === "stopping" ? (
-          <button className={styles.primary} type="button" onClick={() => void stop()} disabled={!running}>
-            {running ? "끝" : "정리하는 중…"}
-          </button>
-        ) : (
-          <button
-            className={styles.primary}
-            type="button"
-            onClick={() => void start()}
-            disabled={step.name === "starting" || cameraBlocksStart}
-          >
-            {step.name === "starting" ? "마이크 켜는 중…" : "리허설 시작"}
-          </button>
-        )}
-        <button className={styles.secondary} type="button" onClick={onRestart} disabled={running}>
-          처음으로
-        </button>
-      </div>
-      <p className={styles.muted}>{dictationOn ? DICTATION_ON_NOTICE : REHEARSAL_NOTICE}</p>
-    </section>
-  );
-}
-
-function DeliveryReport({
-  outcome,
-  coach,
-  onRetryCoach,
-  onAgain,
-  onRestart,
-}: {
-  outcome: RehearsalOutcome;
-  coach: CoachState;
-  onRetryCoach: () => void;
-  onAgain: () => void;
-  onRestart: () => void;
-}) {
-  const { delivery: result, face } = outcome;
-  return (
-    <div className={styles.report}>
-      <section className={styles.card}>
-        <h2>말투 점수</h2>
-        {result.measured ? (
-          <>
-            <p className={styles.total}>
-              {result.total}점 <span className={styles.muted}>/ 100</span>
-              {result.totalNote && <span className={styles.tag}> {result.totalNote}</span>}
-            </p>
-            <dl className={styles.details}>
-              {deliveryItems(result).map((item) => (
-                <Detail key={item.label} label={item.label}>
-                  <strong>{item.score}</strong> · {item.reason}
-                </Detail>
-              ))}
-            </dl>
-            <h3>{SILENCE_SECONDS}초 넘게 멈춘 곳</h3>
-            {result.silences.length === 0 ? (
-              <p className={styles.muted}>없어요.</p>
-            ) : (
-              <ul className={styles.itemList}>
-                {result.silences.map((silence) => (
-                  <li key={silence.start}>{silenceLabel(silence)}</li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : (
-          <>
-            <p className={styles.alert}>{result.message}</p>
-            <p className={styles.muted}>
-              말한 시간이 {Math.round(result.spokenSeconds)}초예요. {MIN_SPOKEN_SECONDS}초 이상 말해야 점수를 낼 수
-              있어요.
-            </p>
-          </>
-        )}
-      </section>
-
-      <SentenceReport outcome={outcome} />
-
-      {face ? <FaceReport face={face} /> : <p className={styles.muted}>{NO_CAMERA_NOTE}</p>}
-
-      {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
-
-      <p className={styles.muted}>{DESIGN_VALUE_NOTICE}</p>
-      {/* With dictation the speed comes from what was said, so the read-as-written caveat does not apply. */}
-      {!outcome.dictationUsed && <p className={styles.muted}>{SPEED_LIMIT_NOTICE}</p>}
-      <div className={styles.actions}>
-        <button className={styles.primary} type="button" onClick={onAgain}>
-          다시 리허설
-        </button>
-        <button className={styles.secondary} type="button" onClick={onRestart}>
-          처음으로
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CoachFeedback({ coach, onRetry }: { coach: Exclude<CoachState, { name: "none" }>; onRetry: () => void }) {
-  return (
-    <section className={styles.card} aria-live="polite">
-      <h2>코치 피드백</h2>
-      {coach.name === "loading" && (
-        <p className={styles.muted}>{coach.retrying ? "한 번 더 받아 오는 중이에요" : "피드백 준비 중이에요"}</p>
-      )}
-      {coach.name === "failed" && (
-        <>
-          <p className={styles.alert} role="alert">
-            {coach.message}
-          </p>
-          <div className={styles.actions}>
-            <button className={styles.secondary} type="button" onClick={onRetry}>
-              다시 시도
-            </button>
-          </div>
-        </>
-      )}
-      {coach.name === "done" && (
-        <>
-          {coach.notices.map((notice) => (
-            <p key={notice} className={styles.muted}>
-              {notice}
-            </p>
-          ))}
-          {coach.feedback.firstFix && <FirstFixView fix={coach.feedback.firstFix} />}
-          {coach.feedback.summary && <p>{coach.feedback.summary}</p>}
-          {coach.feedback.summaryUnverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
-          <ol className={styles.itemList}>
-            {coach.feedback.items.map((item) => (
-              <li key={item.item}>
-                <p className={styles.tag}>{item.item}</p>
-                {item.unverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
-                <p>{item.explain}</p>
-                {item.tryThis && (
-                  <p className={styles.tryThis}>
-                    <strong>다음에 해 볼 것</strong> {item.tryThis}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ol>
-          <p className={styles.muted}>코치는 점수를 바꾸지 않고, 앱이 잰 숫자만 보고 풀어 줘요.</p>
-        </>
-      )}
-    </section>
-  );
-}
-
-function FaceReport({ face }: { face: FaceResult }) {
-  return (
-    <section className={styles.card}>
-      <h2>얼굴 행동 점수</h2>
-      <p className={styles.practiceNotice}>{FACE_PRACTICE_NOTICE}</p>
-      {face.measured ? (
-        <>
-          <p className={styles.total}>
-            {face.total}점 <span className={styles.muted}>/ 100</span>
-          </p>
-          <dl className={styles.details}>
-            {faceItems(face).map((item) => (
-              <Detail key={item.label} label={item.label}>
-                <strong>{item.score}</strong> · {item.reason}
-              </Detail>
-            ))}
-          </dl>
-          <h3>시선이 낮았던 구간</h3>
-          {face.lowGazeWindows.length === 0 ? (
-            <p className={styles.muted}>없어요.</p>
-          ) : (
-            <ul className={styles.itemList}>
-              {face.lowGazeWindows.map((window) => (
-                <li key={window.start}>{lowGazeLabel(window)}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      ) : (
-        <>
-          <p className={styles.alert}>{face.message}</p>
-          <p className={styles.muted}>{notEnoughFaceDetail(face.measuredRatio)}</p>
-        </>
-      )}
-      <p className={styles.muted}>{undetectedLabel(face.undetectedSeconds)}</p>
-      <p className={styles.muted}>{FACE_DESIGN_NOTICE}</p>
-    </section>
-  );
-}
-
-function FirstFixView({ fix }: { fix: FirstFix }) {
-  return (
-    <div className={styles.firstFix}>
-      <h3>가장 먼저 고칠 한 가지</h3>
-      {fix.quote && <Quote text={fix.quote} found={fix.quoteFound} />}
-      {fix.unverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
-      <p>{fix.explain}</p>
-      <p className={styles.tryThis}>
-        <strong>다음 리허설 목표</strong> {fix.goal}
-      </p>
-    </div>
-  );
-}
-
-// Each mark has its own color, but the words always say what it is.
-const MARK_STYLE: Record<SentenceMark["kind"], string> = {
-  pause: styles.markPause,
-  lowGaze: styles.markGaze,
-  fast: styles.markFast,
-  skipped: styles.markMissing,
-  unread: styles.markMissing,
-};
-
-function SentenceReport({ outcome }: { outcome: RehearsalOutcome }) {
-  const { section, sentences } = outcome;
-  return (
-    <section className={styles.card}>
-      <h2>문장별로 보기</h2>
-      {outcome.dictationFellBack && <p className={styles.muted}>{DICTATION_FELL_BACK_NOTE}</p>}
-      {section.marks === null ? (
-        <p className={styles.muted}>{NO_DICTATION_SENTENCES_NOTE}</p>
-      ) : (
-        <>
-          <p className={styles.muted}>
-            문장 위치 <span className={styles.basis}>{basisLabel(section.approximate)}</span>
-          </p>
-          <ol className={styles.sentenceList}>
-            {sentences.map((sentence, i) => {
-              const marks = section.marks?.[i] ?? [];
-              return (
-                <li key={i} className={marks.length > 0 ? styles.markedSentence : undefined}>
-                  {marks.length > 0 && (
-                    <span className={styles.markRow}>
-                      {marks.map((mark) => (
-                        <span key={mark.kind} className={`${styles.mark} ${MARK_STYLE[mark.kind]}`}>
-                          {markLabel(mark)}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  <span>{sentence.text}</span>
-                </li>
-              );
-            })}
-          </ol>
-        </>
-      )}
-      {section.quarters ? (
-        <>
-          <h3>구간별 말 속도</h3>
-          <ul className={styles.itemList}>
-            {section.quarters.map((quarter, i) => (
-              <li key={quarter.first}>
-                {i + 1}구간 ({quarter.first + 1}~{quarter.last + 1}번 문장):{" "}
-                {quarter.pace === null ? "말하지 않음" : `분당 ${quarter.pace}음절`}
-              </li>
-            ))}
+          <ul className={styles.trust}>
+            <li>가입 없이 바로</li>
+            <li>리허설 소리는 저장하지 않음</li>
+            <li>카메라는 선택</li>
           </ul>
-        </>
-      ) : (
-        section.marks !== null && <p className={styles.muted}>{NO_DICTATION_PACE_NOTE}</p>
-      )}
-      {section.fillers && (
-        <p>
-          군말 {section.fillers.total}번{" "}
-          <span className={styles.tag}>{FILLER_ACCURACY_NOTE}</span>
-          {section.fillers.total > 0 &&
-            `: ${Object.entries(section.fillers.words)
-              .filter(([, count]) => count > 0)
-              .map(([word, count]) => `${word} ${count}`)
-              .join(", ")}`}
+        </div>
+
+        <figure className={styles.script} aria-label="리허설 표시가 달린 대본 예시">
+          <figcaption className={styles.scriptHead}>
+            <span>예시 · 대본 일부</span>
+            <span>0:58 / 1:00</span>
+          </figcaption>
+          <p className={styles.line}>
+            <span className={styles.n}>1</span>안녕하세요. 오늘은 아침 식사가 수업 집중에 주는 영향을 말씀드리겠습니다.
+          </p>
+          <p className={styles.line}>
+            <span className={styles.n}>2</span>저는 지난 2주 동안 아침을 먹은 날과 먹지 않은 날의{" "}
+            <span className={styles.under}>집중 시간을 직접 기록했습니다.</span>
+            <span className={styles.mark}>시선 낮음</span>
+          </p>
+          <p className={styles.line}>
+            <span className={styles.n}>3</span>아침을 먹은 날은 평균 40분, 먹지 않은 날은 25분에 그쳤습니다.
+            <span className={styles.mark}>빠름 · 분당 372음절</span>
+          </p>
+          <p className={styles.line}>
+            <span className={styles.n}>4</span>
+            <span className={styles.pause}>멈춤 5초</span>물론 한 사람의 기록이라 모두에게 같다고 말할 수는 없습니다.
+          </p>
+          <div className={styles.bubble}>
+            <p className={styles.bubbleLabel}>
+              질문 1 / {QUESTION_COUNT} · {QUESTION_TYPES[0]}
+            </p>
+            <p className={styles.bubbleQuestion}>
+              먹은 날 40분, 먹지 않은 날 25분이라고 하셨는데, 집중한 시간은 무엇을 기준으로 재셨나요?
+            </p>
+          </div>
+        </figure>
+      </section>
+
+      <section className={styles.block} aria-labelledby="intro-scenes">
+        <p className={styles.eyebrow}>이런 순간을 연습해요</p>
+        <h2 id="intro-scenes">질문이 오는 발표라면 어디든</h2>
+        <p className={styles.intro}>발표가 끝난 뒤 받는 질문까지가 발표예요. 미리 받아 보고, 미리 답해 보세요.</p>
+        <div className={styles.scenarios}>
+          <div className={styles.card}>
+            <p className={styles.cardLabel}>수업</p>
+            <h3>조별 과제 발표</h3>
+            <p>근거 없는 주장, 출처 없는 숫자를 질문으로 미리 받아 볼 수 있어요.</p>
+          </div>
+          <div className={styles.card}>
+            <p className={styles.cardLabel}>프로젝트</p>
+            <h3>시연과 질의응답</h3>
+            <p>&ldquo;왜 이 방법을 골랐나요?&rdquo;에 답하는 연습을 해요.</p>
+          </div>
+          <div className={styles.card}>
+            <p className={styles.cardLabel}>졸업·연구</p>
+            <h3>중간·최종 발표</h3>
+            <p>결론이 근거보다 넓어진 곳을 질문으로 받아 볼 수 있어요.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.block} aria-labelledby="intro-how">
+        <p className={styles.eyebrow}>사용 방법</p>
+        <h2 id="intro-how">대본 하나로 두 가지를 연습해요</h2>
+        <p className={styles.intro}>
+          처음엔 질문으로, 그다음엔 리허설로. 리허설 결과는 &apos;가장 먼저 고칠 한 가지&apos;부터 보여 줘요.
         </p>
-      )}
-    </section>
+        <ol className={styles.steps}>
+          <li>
+            <p className={styles.stepLabel}>01 · 대본</p>
+            <h3>대본을 넣어요</h3>
+            <p>발표할 말을 그대로 붙여 넣고, 듣는 사람과 제한 시간을 적어요.</p>
+          </li>
+          <li>
+            <p className={styles.stepLabel}>02 · 질문</p>
+            <h3>소리로 묻고, 말로 답해요</h3>
+            <p>
+              {QUESTION_TYPES.join(", ")}. 대본의 약한 곳을 겨냥한 질문 {QUESTION_COUNT}개가 하나씩 나와요.
+            </p>
+          </li>
+          <li>
+            <p className={styles.stepLabel}>03 · 리허설</p>
+            <h3>문장마다 짚어 줘요</h3>
+            <p>
+              멈춘 곳을 대본 위에 표시해요. 받아쓰기를 켜면 빨라진 문장도 짚어요. 카메라를 켜면 시선이 낮았던 문장도
+              참고로 알려 줘요.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section className={styles.block} aria-labelledby="intro-what">
+        <p className={styles.eyebrow}>무엇을 봐 주나요</p>
+        <h2 id="intro-what">내용, 전달, 시선을 나눠서 봐요</h2>
+        <p className={styles.intro}>
+          숫자는 정해 둔 기준표로 코드가 재고, 코치는 그 숫자만 근거로 설명해요. 대본에 없는 숫자나 &ldquo;긴장해
+          보여요&rdquo; 같은 판단은 쓰지 않도록 코드가 한 번 더 검사해요.
+        </p>
+        <div className={styles.cats}>
+          <div className={styles.cat}>
+            <p className={styles.chip}>질문 연습</p>
+            <h3>내용</h3>
+            <p className={styles.why}>질문은 주장과 근거 사이가 빈 곳에서 나와요.</p>
+            <ul>
+              <li>잘한 점 2개, 고칠 점 3개 (대본 인용)</li>
+              <li>고칠 점마다 &ldquo;이렇게 말해 보기&rdquo;</li>
+              <li>답변 판정: {VERDICTS.join(" · ")}</li>
+            </ul>
+          </div>
+          <div className={styles.cat}>
+            <p className={styles.chip}>리허설 · 마이크</p>
+            <h3>전달</h3>
+            <p className={styles.why}>같은 내용도 빠르거나 오래 멈추면 놓쳐요.</p>
+            <ul>
+              <li>
+                말 속도: 분당 {SPEED_LOW}~{SPEED_HIGH}음절 권장
+              </li>
+              <li>3초 넘게 멈춘 곳과 대략의 문장</li>
+              <li>끝으로 갈수록 작아지는 목소리, 제한 시간</li>
+            </ul>
+          </div>
+          <div className={styles.cat}>
+            <p className={styles.chip}>리허설 · 카메라 선택</p>
+            <h3>시선과 자세</h3>
+            <p className={styles.why}>화면을 덜 보면 청중과 멀어져요.</p>
+            <ul>
+              <li>화면을 본 시간, 시선이 낮았던 문장 (참고용)</li>
+              <li>평소보다 웃은 시간</li>
+              <li>고개 움직임, 화면 안 자세</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.block} aria-labelledby="intro-privacy">
+        <p className={styles.eyebrow}>개인정보</p>
+        <h2 id="intro-privacy">무엇이 어디로 가는지 먼저 알려 드려요</h2>
+        <p className={styles.intro}>녹음과 영상은 저장하지 않아요. 밖으로 나가는 것은 아래 두 가지뿐이에요.</p>
+        <div className={styles.privacy}>
+          <div>
+            <p className={`${styles.tag} ${styles.stay}`}>브라우저 안</p>
+            <h3>리허설 소리와 카메라 영상</h3>
+            <p>저장하지 않고 브라우저 밖으로 보내지 않아요. 말한 구간과 얼굴 값만 계산해요.</p>
+          </div>
+          <div>
+            <p className={`${styles.tag} ${styles.go}`}>구글 서버</p>
+            <h3>말로 한 답변과 켜 둔 받아쓰기</h3>
+            <p>받아쓰기를 위해 목소리가 구글 서버로 전송돼요. 이 앱은 녹음을 저장하지 않아요.</p>
+          </div>
+          <div>
+            <p className={`${styles.tag} ${styles.go}`}>Claude API</p>
+            <h3>대본·주제·듣는 사람, 답변 글, 점수 숫자와 문장별 표시</h3>
+            <p>평가를 위해 보내요. 영상, 사진, 소리는 보내지 않아요.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.closing} aria-labelledby="intro-start">
+        <div>
+          <h2 id="intro-start">다음 발표 대본, 지금 넣어 보세요</h2>
+          <p>질문 준비에 30~50초쯤 걸려요.</p>
+        </div>
+        <Link className={styles.closingButton} href="/practice">
+          질문 연습 시작
+        </Link>
+      </section>
+    </main>
   );
 }

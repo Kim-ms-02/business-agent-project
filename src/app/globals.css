@@ -1,36 +1,89 @@
+/* Colors, fonts, and spacing from the site mockup (docs/design/site-mockup.html).
+   Contrast values are recorded in docs/design-notes.md and checked by tests/designTokens.test.ts. */
 :root {
-  --background: #ffffff;
-  --foreground: #1a1a1a;
-  --muted: #5f6368;
-  --border: #d0d4d9;
-  --surface: #f5f6f8;
-  --accent: #2457c5;
-  --accent-text: #ffffff;
-  --danger: #b3261e;
-  --danger-surface: #fdecea;
-  --warning: #c99400;
-  --warning-surface: #fff6d6;
-  --warning-text: #7a5a00;
+  --paper: #f5f6f8;
+  --sheet: #ffffff;
+  --ink: #161b26;
+  --muted: #586172;
+  --line: #dde1e8;
+  --spot: #d9822b;
+  --spot-ink: #8f4e0c;
+  --spot-wash: #fcefdf;
+  --good: #2f6b4f;
+  --good-wash: #e3f1ea;
+  --danger: #a3291f;
+  --danger-surface: #fbeae7;
+  --warning: #b88a00;
+  --warning-surface: #fff3cc;
+  --warning-text: #6e5200;
+  /* The light orange is under 3:1 on paper, so the ring uses the dark orange. */
+  --focus-ring: var(--spot-ink);
+
+  --display: var(--font-serif-kr), "AppleMyungjo", serif;
+  --body: var(--font-plex-sans-kr), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  /* IBM Plex Mono has no Hangul, so Korean in number labels falls back to the body font, not a system monospace. */
+  --mono: var(--font-plex-mono), var(--font-plex-sans-kr), ui-monospace, monospace;
+
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 18px;
+  --space-lg: 28px;
+  --space-xl: 48px;
+  --space-section: 64px;
+  --page-max: 1120px;
+  --gutter: 24px;
+  --radius-mark: 4px;
+  --radius-button: 10px;
+  --radius-card: 14px;
+  --radius-stage: 18px;
+  --radius-pill: 999px;
+
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #121212;
-    --foreground: #ececec;
-    --muted: #a5a9ad;
-    --border: #3a3d41;
-    --surface: #1d1f22;
-    --accent: #7aa2f7;
-    --accent-text: #0d1117;
-    --danger: #f2b8b5;
-    --danger-surface: #3a1a18;
-    --warning: #e0b84a;
-    --warning-surface: #3a3115;
-    --warning-text: #f0d68a;
-  }
-
-  html {
+  :root:not([data-theme="light"]) {
+    --paper: #11141a;
+    --sheet: #191d26;
+    --ink: #e9ecf2;
+    --muted: #a3abb8;
+    --line: #2b313d;
+    --spot: #f0a64e;
+    --spot-ink: #f3b66f;
+    --spot-wash: #2e2416;
+    --good: #7cc3a0;
+    --good-wash: #16271f;
+    --danger: #f2b3ab;
+    --danger-surface: #3a1c19;
+    --warning: #d8ae3a;
+    --warning-surface: #362c12;
+    --warning-text: #f0d47e;
     color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #11141a;
+  --sheet: #191d26;
+  --ink: #e9ecf2;
+  --muted: #a3abb8;
+  --line: #2b313d;
+  --spot: #f0a64e;
+  --spot-ink: #f3b66f;
+  --spot-wash: #2e2416;
+  --good: #7cc3a0;
+  --good-wash: #16271f;
+  --danger: #f2b3ab;
+  --danger-surface: #3a1c19;
+  --warning: #d8ae3a;
+  --warning-surface: #362c12;
+  --warning-text: #f0d47e;
+  color-scheme: dark;
+}
+
+@media (max-width: 480px) {
+  :root {
+    --gutter: 16px;
   }
 }
 
@@ -42,11 +95,20 @@
 
 body {
   min-height: 100vh;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  line-height: 1.6;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--body);
+  font-size: 1rem;
+  line-height: 1.7;
+  word-break: keep-all;
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--display);
+  line-height: 1.3;
+  text-wrap: balance;
 }
 
 button,
@@ -54,4 +116,9 @@ input,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
