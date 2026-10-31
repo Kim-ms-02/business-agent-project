@@ -45,7 +45,7 @@ describe("SiteNavBar", () => {
   });
 
   it("has the brand link home and a start button to question practice", () => {
-    expect(links(html)).toContainEqual({ href: "/", text: "발표 코치", current: false });
+    expect(links(html)).toContainEqual({ href: "/", text: "발표 연습실", current: false });
     expect(links(html)).toContainEqual({ href: "/practice", text: "대본 넣고 시작", current: false });
     expect(html).not.toContain("결과 예시");
   });
