@@ -95,12 +95,7 @@ describe("shared inputs", () => {
 });
 
 describe("home address", () => {
-  it("sends / to question practice until the intro page is built", () => {
-    try {
-      Home();
-      expect.unreachable();
-    } catch (error) {
-      expect(String((error as { digest?: string }).digest)).toContain("/practice");
-    }
+  it("shows the intro page instead of sending visitors to question practice", () => {
+    expect(() => Home()).not.toThrow();
   });
 });
