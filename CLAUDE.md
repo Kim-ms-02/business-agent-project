@@ -31,7 +31,9 @@
   - src/lib/coach.ts: Claude 호출과 도구 형식 정의
   - src/lib/validate.ts: 결과 점검, 인용 검사, 시간 계산, 읽어주기용 문장 나누기 (순수 함수)
   - src/lib/speech.ts: 브라우저 읽어주기와 받아쓰기
-  - src/app/practice/page.tsx: 화면 흐름 (v1.1 2단계에서 src/app/page.tsx에서 옮김. 사이트 틀은 src/app/layout.tsx, 함께 쓰는 입력값은 src/app/DraftProvider.tsx)
+  - src/app/practice/page.tsx: 질문 연습 화면 흐름 (v1.1 2단계에서 src/app/page.tsx에서 옮김)
+  - src/app/rehearsal/page.tsx: 리허설 화면 흐름 (v1.1 5단계에서 질문 연습 화면에서 옮김)
+  - 사이트 틀은 src/app/layout.tsx. 페이지를 옮겨도 남는 값은 src/app/DraftProvider.tsx(대본·주제·듣는 사람·제한 시간), src/app/PracticeProvider.tsx(질문·답·평가 결과), src/app/RehearsalProvider.tsx(마지막 리허설 결과와 코치 피드백). 두 페이지 맨 위의 대본 입력 칸은 src/app/DraftFields.tsx
   - tests/validate.test.ts: 검증 함수 테스트
 - 보조: src/lib/types.ts(공통 타입), src/lib/skill.ts(스킬 파일 읽기), src/app/api/review·answer(서버 경로), tests/fixtures/sample-script.txt(약점을 일부러 넣은 확인용 대본)
 - 앞으로 추가할 곳: 말투 관련은 아래 세 파일로 나눈다.
