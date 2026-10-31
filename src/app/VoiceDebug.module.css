@@ -1,18 +1,56 @@
+/* The corner box that holds the three panels behind tabs. */
 .panel {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  z-index: 10;
+}
+
+.box {
+  width: 300px;
+  max-width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  flex: 1;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
   color: var(--foreground);
-  font-size: 0.85rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+/* One panel's contents inside the box. */
+.pane {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 10;
 }
 
 .title {
@@ -68,11 +106,6 @@
   opacity: 0.6;
 }
 
-.left {
-  right: auto;
-  left: 16px;
-  width: 240px;
-}
 
 .video {
   width: 100%;
@@ -91,13 +124,6 @@
   color: var(--muted);
 }
 
-.top {
-  top: 16px;
-  bottom: auto;
-  width: 280px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
 
 .pieces {
   margin: 0;

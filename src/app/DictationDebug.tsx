@@ -79,7 +79,7 @@ export default function DictationDebug({ script }: { script: string }) {
   });
 
   return (
-    <aside className={`${styles.panel} ${styles.top}`} aria-label="받아쓰기 맞추기 확인 (개발용)">
+    <section className={styles.pane} aria-label="받아쓰기 맞추기 확인 (개발용)">
       <p className={styles.title}>받아쓰기 맞추기 확인 (개발용)</p>
       {speakable === 0 ? (
         <p className={styles.note}>입력 화면에 대본을 넣으면 확인할 수 있어요.</p>
@@ -102,6 +102,6 @@ export default function DictationDebug({ script }: { script: string }) {
           </button>
         </>
       )}
-    </aside>
+    </section>
   );
 }

@@ -76,6 +76,7 @@ import {
 } from "@/lib/validate";
 import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./page.module.css";
+import DevPanel from "./DevPanel";
 import DictationDebug from "./DictationDebug";
 import FaceDebug from "./FaceDebug";
 import VoiceDebug from "./VoiceDebug";
@@ -322,11 +323,13 @@ export default function Home() {
       )}
 
       {process.env.NODE_ENV === "development" && (
-        <>
-          <VoiceDebug />
-          <FaceDebug />
-          <DictationDebug script={script} />
-        </>
+        <DevPanel
+          tabs={[
+            { id: "mic", label: "마이크", content: <VoiceDebug /> },
+            { id: "camera", label: "카메라", content: <FaceDebug /> },
+            { id: "dictation", label: "받아쓰기", content: <DictationDebug script={script} /> },
+          ]}
+        />
       )}
     </main>
   );

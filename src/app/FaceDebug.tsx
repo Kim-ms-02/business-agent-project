@@ -82,7 +82,7 @@ export default function FaceDebug() {
   const checks = frame?.detected && base ? lookingChecks(frame, base) : null;
 
   return (
-    <aside className={`${styles.panel} ${styles.left}`} aria-label="카메라 확인 (개발용)">
+    <section className={styles.pane} aria-label="카메라 확인 (개발용)">
       <p className={styles.title}>카메라 확인 (개발용)</p>
       <video ref={video} className={styles.video} muted playsInline hidden={state.name !== "on"} />
 
@@ -160,6 +160,6 @@ export default function FaceDebug() {
           </button>
         </>
       )}
-    </aside>
+    </section>
   );
 }

@@ -51,7 +51,7 @@ export default function VoiceDebug() {
   const level = state.name === "on" ? Math.round(state.live.level * 100) : 0;
 
   return (
-    <aside className={styles.panel} aria-label="마이크 확인 (개발용)">
+    <section className={styles.pane} aria-label="마이크 확인 (개발용)">
       <p className={styles.title}>마이크 확인 (개발용)</p>
       {state.name === "on" ? (
         <>
@@ -88,6 +88,6 @@ export default function VoiceDebug() {
           </button>
         </>
       )}
-    </aside>
+    </section>
   );
 }
