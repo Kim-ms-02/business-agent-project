@@ -21,7 +21,7 @@ export default function DraftFields() {
         </label>
         <label className={styles.field}>
           듣는 사람
-          <input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="예: 같은 학과 1학년 학생" />
+          <input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="예: 수업 수강생, 팀 동료, 세미나 참석자" />
         </label>
       </div>
       <label className={`${styles.field} ${styles.limit}`}>

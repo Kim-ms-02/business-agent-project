@@ -16,14 +16,14 @@ export default function Home() {
     <main className={styles.page}>
       <section className={styles.hero} aria-labelledby="intro-title">
         <div>
-          <p className={styles.eyebrow}>AI 발표 연습 코치</p>
+          <p className={styles.eyebrow}>AI 발표 연습</p>
           <h1 id="intro-title">
-            교수님이 묻기 전에
+            청중이 묻기 전에
             <br />
             <em>먼저 질문받아</em> 보세요
           </h1>
           <p className={styles.lede}>
-            대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 소리로 물어봐요. 다 답하면 대본과 답변을 평가하고,
+            대본을 넣으면 청중처럼 질문 {QUESTION_COUNT}개를 소리로 물어봐요. 다 답하면 대본과 답변을 평가하고,
             리허설에서는 어느 문장쯤에서 멈췄는지, 카메라를 켜면 시선이 낮았던 문장도 참고로 알려 줘요.
           </p>
           <div className={styles.ctas}>
@@ -81,8 +81,8 @@ export default function Home() {
         <p className={styles.intro}>발표가 끝난 뒤 받는 질문까지가 발표예요. 미리 받아 보고, 미리 답해 보세요.</p>
         <div className={styles.scenarios}>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>수업</p>
-            <h3>조별 과제 발표</h3>
+            <p className={styles.cardLabel}>수업·세미나</p>
+            <h3>수업과 세미나 발표</h3>
             <p>근거 없는 주장, 출처 없는 숫자를 질문으로 미리 받아 볼 수 있어요.</p>
           </div>
           <div className={styles.card}>
@@ -91,8 +91,8 @@ export default function Home() {
             <p>&ldquo;왜 이 방법을 골랐나요?&rdquo;에 답하는 연습을 해요.</p>
           </div>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>졸업·연구</p>
-            <h3>중간·최종 발표</h3>
+            <p className={styles.cardLabel}>연구·업무</p>
+            <h3>중간 발표와 보고</h3>
             <p>결론이 근거보다 넓어진 곳을 질문으로 받아 볼 수 있어요.</p>
           </div>
         </div>

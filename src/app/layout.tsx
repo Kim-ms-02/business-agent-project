@@ -22,7 +22,7 @@ const sans = IBM_Plex_Sans_KR({
 const mono = IBM_Plex_Mono({ weight: "500", subsets: ["latin"], variable: "--font-plex-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "발표 코치",
+  title: "발표 연습실",
   description: `대본을 넣으면 예상 질문 ${QUESTION_COUNT}개를 소리로 물어보고, 다 답하면 대본과 답변 평가를 보여 주는 연습 도구`,
 };
 
