@@ -95,7 +95,8 @@ describe("rehearsal result kept across pages", () => {
 
   it("shows the last result when the visitor comes back", () => {
     expect(text(html)).toContain("말투 점수");
-    expect(buttons(html)).toEqual(["다시 리허설", "처음으로"]);
+    // Since v1.1 step 5, 처음으로 is 대본 고치기 (tests/rehearsalAgain.test.ts).
+    expect(buttons(html)).toEqual(["다시 리허설", "대본 고치기"]);
   });
 
   it("hides the input box while the result is shown", () => {
@@ -111,7 +112,7 @@ describe("rehearsal result kept across pages", () => {
     expect(source).not.toMatch(/VoiceRecord|FaceFrame|DictationRecord|RehearsalInput/);
   });
 
-  it("never clears question practice: 처음으로 only goes back to the rehearsal start", () => {
+  it("never clears question practice: the result buttons only go back to the rehearsal start", () => {
     const source = readFileSync("src/app/rehearsal/page.tsx", "utf8");
     expect(source).not.toMatch(/setPrepared|setAnswers|usePractice/);
   });
