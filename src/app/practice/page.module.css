@@ -111,6 +111,11 @@
 .primary,
 .secondary,
 .stageButton {
+  /* 리허설 하기 is a link; these make it the same box as the buttons. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   min-height: 44px;
   padding: 0 20px;
   border-radius: var(--radius-button);

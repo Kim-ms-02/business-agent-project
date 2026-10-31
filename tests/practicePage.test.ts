@@ -58,6 +58,17 @@ describe("question practice page", () => {
     expect(buttons(html)).toEqual(["질문 받기"]);
     expect(html).toMatch(/<a[^>]*href="\/rehearsal"[^>]*>리허설 하기<\/a>/);
   });
+
+  // 리허설 하기 is a link, which sits inline and is underlined unless its style says otherwise.
+  it("draws the 리허설 하기 link in the same button shape as 질문 받기", () => {
+    const css = readFileSync("src/app/practice/page.module.css", "utf8");
+    const shared = css.match(/\.primary,\s*\.secondary,\s*\.stageButton\s*\{([^}]*)\}/);
+    expect(shared).not.toBeNull();
+    expect(shared![1]).toMatch(/display:\s*inline-flex/);
+    expect(shared![1]).toMatch(/align-items:\s*center/);
+    expect(shared![1]).toMatch(/justify-content:\s*center/);
+    expect(shared![1]).toMatch(/text-decoration:\s*none/);
+  });
 });
 
 describe("one question at a time", () => {
