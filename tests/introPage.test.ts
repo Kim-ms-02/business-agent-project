@@ -35,6 +35,12 @@ describe("intro page wording", () => {
     expect(text).toContain("대본·주제·듣는 사람, 답변 글, 점수 숫자와 문장별 표시");
   });
 
+  // v1.0 check: "출처 없는 숫자" was the weakness missed most often, so the card does not promise to catch it.
+  it("does not promise to catch numbers without a source", () => {
+    expect(text).toContain("근거 없는 주장, 출처 없는 숫자를 질문으로 미리 받아 볼 수 있어요.");
+    expect(text).not.toContain("숫자를 질문으로 미리 짚어요");
+  });
+
   it.each([
     ["the one-minute claim", "1분이면"],
     ["three rounds of practice", "세 번 연습"],
