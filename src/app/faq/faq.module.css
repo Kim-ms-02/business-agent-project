@@ -1,0 +1,57 @@
+/* FAQ page (v1.1). */
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 var(--gutter) var(--space-section);
+}
+
+.header {
+  padding: 44px 0 var(--space-md);
+}
+
+.header h1 {
+  font-size: 1.875rem;
+  font-weight: 800;
+}
+
+.faq {
+  max-width: 760px;
+  border-top: 1px solid var(--line);
+}
+
+.faq details {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.faq summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The sign says whether the answer is open, next to the question that says what it is. */
+.faq summary::after {
+  content: "+";
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 1.125rem;
+  color: var(--muted);
+}
+
+.faq details[open] summary::after {
+  content: "−";
+}
+
+.faq details p {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.75;
+}
