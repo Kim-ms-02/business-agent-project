@@ -21,7 +21,8 @@
 
   --display: var(--font-serif-kr), "AppleMyungjo", serif;
   --body: var(--font-plex-sans-kr), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  --mono: var(--font-plex-mono), ui-monospace, monospace;
+  /* IBM Plex Mono has no Hangul, so Korean in number labels falls back to the body font, not a system monospace. */
+  --mono: var(--font-plex-mono), var(--font-plex-sans-kr), ui-monospace, monospace;
 
   --space-xs: 6px;
   --space-sm: 10px;
