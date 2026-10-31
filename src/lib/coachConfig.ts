@@ -28,3 +28,8 @@ export const BANNED_WORD_FORMS: Record<string, string[]> = {
   떨: ["떨리", "떨려", "떨렸", "떨림"],
   "표정이 어둡": ["표정이 어둡", "표정이 어두"],
 };
+
+// Words that show a try-this line is telling the speaker what to do ("숫자로 넣어 말해 보세요")
+// instead of being a sentence to say. Matched without spaces. Plain requests to the audience
+// ("여러분도 휴대폰을 열어 보세요") are left alone, so only instruction-like verbs are listed.
+export const TRY_THIS_GUIDANCE = ["넣어", "이렇게말해", "말해보세요", "덧붙여보세요", "확인해보세요", "바꿔보세요"];

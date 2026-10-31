@@ -90,3 +90,20 @@
 .values dt {
   color: var(--muted);
 }
+
+.top {
+  top: 16px;
+  bottom: auto;
+  width: 280px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.pieces {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}

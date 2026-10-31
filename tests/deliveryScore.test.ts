@@ -270,3 +270,17 @@ describe("result screen text", () => {
     expect(SPEED_LIMIT_NOTICE).toContain("즉흥");
   });
 });
+
+describe("scoreDelivery: speed from dictation (v0.4)", () => {
+  it("says the syllables came from the dictated text, not the script", () => {
+    const result = measured(
+      scoreDelivery(input({ record: record(ONE_MINUTE, 60), scriptSyllables: 280, syllableSource: "dictation" })),
+    );
+    expect(result.items.speed.reason).toBe("분당 280음절 (받아쓴 글 280음절, 말한 시간 1분 0초)");
+  });
+
+  it("keeps the script wording when no source is given", () => {
+    const result = measured(scoreDelivery(input({ record: record(ONE_MINUTE, 60), scriptSyllables: 280 })));
+    expect(result.items.speed.reason).toBe("분당 280음절 (대본 280음절, 말한 시간 1분 0초)");
+  });
+});

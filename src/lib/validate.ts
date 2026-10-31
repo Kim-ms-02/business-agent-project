@@ -5,6 +5,7 @@ import {
   MAX_SUMMARY_SENTENCES,
   QUESTION_COUNT,
   STRENGTH_COUNT,
+  TRY_THIS_GUIDANCE,
 } from "./coachConfig";
 import { MAX_ITEM_SCORE } from "./deliveryConfig";
 import {
@@ -18,6 +19,7 @@ import {
   type Criterion,
   type DeliveryFeedback,
   type DeliveryItemFeedback,
+  type FirstFix,
   type Improvement,
   type Question,
   type QuestionType,
@@ -181,10 +183,28 @@ function itemCount(review: Review): number {
   return review.strengths.length + review.improvements.length + review.questions.length;
 }
 
-/** After one retry for a short review, picks the review to show. */
+/** True when a try-this line tells the speaker what to do rather than giving words to say. */
+export function tryThisGuidance(tryThis: string): boolean {
+  const compact = tryThis.replace(/\s+/g, "");
+  return TRY_THIS_GUIDANCE.some((word) => compact.includes(word));
+}
+
+/** Improvements whose try-this line has instructions mixed in. */
+export function guidanceCount(review: Review): number {
+  return review.improvements.filter((i) => tryThisGuidance(i.tryThis)).length;
+}
+
+/**
+ * After one retry (for a short review, or try-this lines with instructions), picks the review to show.
+ * A complete review beats a short one; between complete ones, fewer instructions wins, the first on a tie.
+ */
 export function chooseReview(first: Review, retry: Review | null): Review {
   if (retry === null) return first;
-  if (findShortages(retry).length === 0) return retry;
+  const firstComplete = findShortages(first).length === 0;
+  const retryComplete = findShortages(retry).length === 0;
+  if (retryComplete && !firstComplete) return retry;
+  if (retryComplete && firstComplete) return guidanceCount(retry) < guidanceCount(first) ? retry : first;
+  if (firstComplete) return first;
   return itemCount(retry) > itemCount(first) ? retry : first;
 }
 
@@ -367,6 +387,28 @@ export function bannedWords(text: string): string[] {
   return FEEDBACK_BANNED_WORDS.filter((word) =>
     (BANNED_WORD_FORMS[word] ?? [word]).some((form) => compact.includes(withoutSpaces(form))),
   );
+}
+
+// ---------- First thing to fix (v0.4 section feedback) ----------
+
+export const FIRST_FIX_MISSING_MESSAGE = "가장 먼저 고칠 한 가지를 받지 못했어요";
+
+/** The next rehearsal's goal must carry a number, so the speaker can tell whether it was met. */
+export function hasGoalNumber(goal: string): boolean {
+  return /\d/.test(goal);
+}
+
+/**
+ * Cleans the first thing to fix. The quote is checked against the script and marked when it is not
+ * there; an empty quote (the fix is about the whole rehearsal) needs no check. Null when unusable.
+ */
+export function normalizeFirstFix(raw: unknown, script: string): FirstFix | null {
+  if (!isRecord(raw)) return null;
+  const quote = typeof raw.quote === "string" ? raw.quote.trim() : "";
+  const explain = screen(raw.explain);
+  const goal = screen(raw.goal);
+  if (explain === null || goal === null) return null;
+  return { quote, quoteFound: quote === "" || quoteExists(script, quote), explain, goal };
 }
 
 export function missingDeliveryMessage(count: number): string {

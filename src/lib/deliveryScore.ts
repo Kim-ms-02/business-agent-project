@@ -36,6 +36,8 @@ export interface DeliveryInput {
   limitSeconds: number;
   /** The speaker's answer to "대본을 끝까지 읽었나요?". Speed is only meaningful for the whole script. */
   readToEnd: boolean;
+  /** Where scriptSyllables came from: the script (default) or what dictation heard (v0.4). */
+  syllableSource?: "script" | "dictation";
 }
 
 export interface ItemScore {
@@ -124,7 +126,7 @@ export function scoreDelivery(input: DeliveryInput): DeliveryResult {
     speed = {
       score: bandScore(perMinute, SPEED_BANDS),
       value: perMinute,
-      reason: `분당 ${Math.round(perMinute)}음절 (대본 ${Math.round(input.scriptSyllables)}음절, 말한 시간 ${formatTime(spokenSeconds)})`,
+      reason: `분당 ${Math.round(perMinute)}음절 (${input.syllableSource === "dictation" ? "받아쓴 글" : "대본"} ${Math.round(input.scriptSyllables)}음절, 말한 시간 ${formatTime(spokenSeconds)})`,
     };
   } else {
     speed = { score: null, value: null, reason: SPEED_NEEDS_WHOLE_SCRIPT };

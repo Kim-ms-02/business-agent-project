@@ -13,7 +13,6 @@ import {
   lowGazeLabel,
   measureBaseline,
   notEnoughFaceDetail,
-  scoreFace,
   undetectedLabel,
   type FaceBaseline,
   type FaceResult,
@@ -25,11 +24,26 @@ import {
   deliveryItems,
   deliverySummary,
   formatTime,
-  scoreDelivery,
   silenceLabel,
-  type DeliveryResult,
-  type VoiceRecord,
 } from "@/lib/deliveryScore";
+import {
+  basisLabel,
+  DICTATION_FELL_BACK_NOTE,
+  DICTATION_ON_NOTICE,
+  DICTATION_OPTION_LABEL,
+  dictationOptionShown,
+  needsReadToEnd,
+  type DictationRecord,
+  FILLER_ACCURACY_NOTE,
+  finishRehearsal,
+  NO_DICTATION_PACE_NOTE,
+  NO_DICTATION_SENTENCES_NOTE,
+  sectionForCoach,
+  type RehearsalInput,
+  type RehearsalOutcome,
+} from "@/lib/rehearsalResult";
+import { DICTATION_GAP_SECONDS } from "@/lib/sectionConfig";
+import { markLabel } from "@/lib/sentenceMarks";
 import {
   appendTranscript,
   canDictate,
@@ -45,12 +59,13 @@ import type {
   DeliveryFeedback,
   DeliveryFeedbackResult,
   DeliverySummary,
+  FirstFix,
   Question,
+  SentenceMark,
   ReviewResult,
 } from "@/lib/types";
 import {
   answerLabel,
-  countSyllables,
   evaluationLabel,
   feedbackLines,
   inputError,
@@ -61,6 +76,7 @@ import {
 } from "@/lib/validate";
 import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./page.module.css";
+import DictationDebug from "./DictationDebug";
 import FaceDebug from "./FaceDebug";
 import VoiceDebug from "./VoiceDebug";
 
@@ -309,6 +325,7 @@ export default function Home() {
         <>
           <VoiceDebug />
           <FaceDebug />
+          <DictationDebug script={script} />
         </>
       )}
     </main>
@@ -578,8 +595,8 @@ type RehearsalStep =
   | { name: "starting" }
   | { name: "running"; startedAt: number }
   | { name: "stopping" }
-  | { name: "askReadToEnd"; record: VoiceRecord; face: FaceResult | null }
-  | { name: "result"; result: DeliveryResult; face: FaceResult | null };
+  | { name: "askReadToEnd"; input: RehearsalInput }
+  | { name: "result"; outcome: RehearsalOutcome };
 
 // The camera is optional. When it is on, the reference pose is measured before the rehearsal starts.
 type CameraState =
@@ -595,6 +612,22 @@ type CoachState =
   | { name: "loading"; retrying: boolean }
   | { name: "failed"; message: string }
   | { name: "done"; feedback: DeliveryFeedback; notices: string[] };
+
+// Rehearsal dictation (v0.4, only when the speaker turns it on). The dictated text stays in this
+// browser tab: it is used to place sentences and count speed, and is dropped with the result.
+interface DictationSession {
+  record: DictationRecord;
+  /** performance.now() when the rehearsal clock started. */
+  startedAt: number;
+  lastHeard: number;
+  active: boolean;
+  stopCurrent: (() => void) | null;
+  watchdog: ReturnType<typeof setInterval> | null;
+  ended: (() => void) | null;
+}
+
+// After "끝", dictation may still send the last piece; wait this long at most.
+const DICTATION_FLUSH_MS = 2000;
 
 async function requestDeliveryFeedback(summary: DeliverySummary): Promise<DeliveryFeedbackResult> {
   try {
@@ -616,6 +649,14 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   const [coach, setCoach] = useState<CoachState>({ name: "none" });
   const [camera, setCamera] = useState<CameraState>({ name: "off" });
   const [faceSeen, setFaceSeen] = useState(true);
+  // The option is only offered in Chrome and Edge. This screen is only shown in the browser.
+  const [dictationAvailable] = useState(
+    () => typeof navigator !== "undefined" && dictationOptionShown(navigator.userAgent, canDictate()),
+  );
+  const [dictationOn, setDictationOn] = useState(false);
+  const [dictationError, setDictationError] = useState<string | null>(null);
+  const dictation = useRef<DictationSession | null>(null);
+  const speakingNow = useRef(false);
   const tracker = useRef<VoiceTracker | null>(null);
   const faceTracker = useRef<FaceTracker | null>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -627,9 +668,81 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
     () => () => {
       void tracker.current?.stop();
       faceTracker.current?.stop();
+      void stopDictation();
     },
     [],
   );
+
+  function startDictation(startedAt: number) {
+    const session: DictationSession = {
+      record: { chunks: [], activity: [] },
+      startedAt,
+      lastHeard: performance.now(),
+      active: true,
+      stopCurrent: null,
+      watchdog: null,
+      ended: null,
+    };
+    const heard = () => {
+      const now = performance.now();
+      session.lastHeard = now;
+      const at = Math.round((now - session.startedAt) / 100) / 10;
+      session.record.activity.push(at);
+      return at;
+    };
+    const listen = () => {
+      session.stopCurrent = startListening({
+        onInterim: (text) => {
+          if (text.trim()) heard();
+        },
+        onFinal: (text) => {
+          const at = heard();
+          if (text.trim()) session.record.chunks.push({ text, at });
+        },
+        // A real error (for example, the microphone is blocked) stops dictation; the rehearsal goes on.
+        onError: (message) => {
+          session.active = false;
+          setDictationError(message);
+        },
+        // Chrome ends dictation on its own after a while; keep it going during the rehearsal.
+        onEnd: () => {
+          if (session.active) listen();
+          else session.ended?.();
+        },
+      });
+    };
+    // Speaking with no dictation for a while means it stalled: restart it.
+    session.watchdog = setInterval(() => {
+      const now = performance.now();
+      if (session.active && speakingNow.current && now - session.lastHeard > DICTATION_GAP_SECONDS * 1000) {
+        session.lastHeard = now;
+        session.stopCurrent?.();
+      }
+    }, 1000);
+    dictation.current = session;
+    listen();
+  }
+
+  /** Stops dictation and waits briefly for the last piece. Null when dictation was off. */
+  async function stopDictation(): Promise<DictationRecord | null> {
+    const session = dictation.current;
+    dictation.current = null;
+    if (!session) return null;
+    if (session.watchdog) clearInterval(session.watchdog);
+    const wasActive = session.active;
+    session.active = false;
+    if (wasActive) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, DICTATION_FLUSH_MS);
+        session.ended = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        session.stopCurrent?.();
+      });
+    }
+    return session.record;
+  }
 
   async function startCamera() {
     if (!video.current) return;
@@ -671,14 +784,19 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   async function start() {
     setStep({ name: "starting" });
     setSpeaking(false);
-    const result = await startVoiceTracker("rehearsal", (live) => setSpeaking(live.speaking));
+    setDictationError(null);
+    const result = await startVoiceTracker("rehearsal", (live) => {
+      setSpeaking(live.speaking);
+      speakingNow.current = live.speaking;
+    });
     if (!result.ok) {
       setStep({ name: "ready", error: result.message });
       return;
     }
     tracker.current = result.tracker;
-    // Face frames from now on belong to the rehearsal; the reference pose seconds are left out.
+    // Face frames and dictation times from now on belong to the rehearsal; the reference pose seconds are left out.
     faceTracker.current?.takeFrames();
+    if (dictationOn) startDictation(performance.now());
     setFaceSeen(true);
     setNow(Date.now());
     setStep({ name: "running", startedAt: Date.now() });
@@ -686,20 +804,40 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
 
   async function stop() {
     setStep({ name: "stopping" });
-    const record = await tracker.current?.stop();
+    const [record, dictated] = await Promise.all([tracker.current?.stop(), stopDictation()]);
     tracker.current = null;
+    // The frames are kept only until the result is computed, to find low-gaze sentences.
     const face =
-      camera.name === "ready" && faceTracker.current ? scoreFace(faceTracker.current.takeFrames(), camera.baseline) : null;
+      camera.name === "ready" && faceTracker.current
+        ? { frames: faceTracker.current.takeFrames(), baseline: camera.baseline }
+        : null;
     stopCamera();
-    if (record) setStep({ name: "askReadToEnd", record, face });
-    else setStep({ name: "ready", error: null });
+    if (!record) {
+      setStep({ name: "ready", error: null });
+      return;
+    }
+    const input: RehearsalInput = { script, limitSeconds, record, face, dictation: dictated };
+    // With dictation the reading is known, so "대본을 끝까지 읽었나요?" is not asked.
+    if (needsReadToEnd(dictated)) setStep({ name: "askReadToEnd", input });
+    else finish(input, null);
   }
 
-  function answerReadToEnd(record: VoiceRecord, face: FaceResult | null, readToEnd: boolean) {
-    const result = scoreDelivery({ record, scriptSyllables: countSyllables(script), limitSeconds, readToEnd });
-    setStep({ name: "result", result, face });
-    if (result.measured) void askCoach({ ...deliverySummary(result), face: faceSummary(face) });
+  function finish(input: RehearsalInput, readToEnd: boolean | null) {
+    const outcome = finishRehearsal(input, readToEnd);
+    setStep({ name: "result", outcome });
+    const summary = coachSummary(outcome);
+    if (summary) void askCoach(summary);
     else setCoach({ name: "none" });
+  }
+
+  /** Scores, reason numbers, and sentence marks for the coach; nothing when speech was too short to score. */
+  function coachSummary(outcome: RehearsalOutcome): DeliverySummary | null {
+    if (!outcome.delivery.measured) return null;
+    return {
+      ...deliverySummary(outcome.delivery),
+      face: faceSummary(outcome.face),
+      section: sectionForCoach(script, outcome.section),
+    };
   }
 
   async function askCoach(summary: DeliverySummary) {
@@ -727,11 +865,11 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
   if (step.name === "result") {
     return (
       <DeliveryReport
-        result={step.result}
-        face={step.face}
+        outcome={step.outcome}
         coach={coach}
         onRetryCoach={() => {
-          if (step.result.measured) void askCoach({ ...deliverySummary(step.result), face: faceSummary(step.face) });
+          const summary = coachSummary(step.outcome);
+          if (summary) void askCoach(summary);
         }}
         onAgain={rehearseAgain}
         onRestart={onRestart}
@@ -745,10 +883,10 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         <p className={styles.question}>대본을 끝까지 읽었나요?</p>
         <p className={styles.muted}>말 속도는 대본 전체를 읽었을 때만 잴 수 있어요.</p>
         <div className={styles.actions}>
-          <button className={styles.primary} type="button" onClick={() => answerReadToEnd(step.record, step.face, true)}>
+          <button className={styles.primary} type="button" onClick={() => finish(step.input, true)}>
             예
           </button>
-          <button className={styles.secondary} type="button" onClick={() => answerReadToEnd(step.record, step.face, false)}>
+          <button className={styles.secondary} type="button" onClick={() => finish(step.input, false)}>
             아니요
           </button>
         </div>
@@ -771,6 +909,7 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
             {formatTime(elapsed)} / 제한 {formatTime(limitSeconds)}
           </span>
           <span className={speaking ? styles.speaking : styles.muted}>{speaking ? "말하는 중" : "조용함"}</span>
+          {dictationOn && <span className={styles.muted}>받아쓰기 켜짐</span>}
         </p>
       ) : (
         <p className={styles.muted}>
@@ -780,6 +919,11 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
       {step.name === "ready" && step.error && (
         <p className={styles.alert} role="alert">
           {step.error}
+        </p>
+      )}
+      {dictationError && (
+        <p className={styles.warningText} role="alert">
+          받아쓰기가 멈췄어요: {dictationError}
         </p>
       )}
 
@@ -825,6 +969,18 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
         )}
       </div>
 
+      {dictationAvailable && !running && step.name !== "stopping" && (
+        <label className={styles.checkRow}>
+          <input
+            type="checkbox"
+            checked={dictationOn}
+            onChange={(event) => setDictationOn(event.target.checked)}
+            disabled={step.name === "starting"}
+          />
+          {DICTATION_OPTION_LABEL}
+        </label>
+      )}
+
       <div className={styles.scriptView}>{script}</div>
 
       <div className={styles.actions}>
@@ -846,26 +1002,25 @@ function Rehearsal({ script, limitSeconds, onRestart }: { script: string; limitS
           처음으로
         </button>
       </div>
-      <p className={styles.muted}>{REHEARSAL_NOTICE}</p>
+      <p className={styles.muted}>{dictationOn ? DICTATION_ON_NOTICE : REHEARSAL_NOTICE}</p>
     </section>
   );
 }
 
 function DeliveryReport({
-  result,
-  face,
+  outcome,
   coach,
   onRetryCoach,
   onAgain,
   onRestart,
 }: {
-  result: DeliveryResult;
-  face: FaceResult | null;
+  outcome: RehearsalOutcome;
   coach: CoachState;
   onRetryCoach: () => void;
   onAgain: () => void;
   onRestart: () => void;
 }) {
+  const { delivery: result, face } = outcome;
   return (
     <div className={styles.report}>
       <section className={styles.card}>
@@ -905,12 +1060,15 @@ function DeliveryReport({
         )}
       </section>
 
+      <SentenceReport outcome={outcome} />
+
       {face ? <FaceReport face={face} /> : <p className={styles.muted}>{NO_CAMERA_NOTE}</p>}
 
       {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
 
       <p className={styles.muted}>{DESIGN_VALUE_NOTICE}</p>
-      <p className={styles.muted}>{SPEED_LIMIT_NOTICE}</p>
+      {/* With dictation the speed comes from what was said, so the read-as-written caveat does not apply. */}
+      {!outcome.dictationUsed && <p className={styles.muted}>{SPEED_LIMIT_NOTICE}</p>}
       <div className={styles.actions}>
         <button className={styles.primary} type="button" onClick={onAgain}>
           다시 리허설
@@ -949,6 +1107,7 @@ function CoachFeedback({ coach, onRetry }: { coach: Exclude<CoachState, { name: 
               {notice}
             </p>
           ))}
+          {coach.feedback.firstFix && <FirstFixView fix={coach.feedback.firstFix} />}
           {coach.feedback.summary && <p>{coach.feedback.summary}</p>}
           {coach.feedback.summaryUnverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
           <ol className={styles.itemList}>
@@ -1008,6 +1167,93 @@ function FaceReport({ face }: { face: FaceResult }) {
       )}
       <p className={styles.muted}>{undetectedLabel(face.undetectedSeconds)}</p>
       <p className={styles.muted}>{FACE_DESIGN_NOTICE}</p>
+    </section>
+  );
+}
+
+function FirstFixView({ fix }: { fix: FirstFix }) {
+  return (
+    <div className={styles.firstFix}>
+      <h3>가장 먼저 고칠 한 가지</h3>
+      {fix.quote && <Quote text={fix.quote} found={fix.quoteFound} />}
+      {fix.unverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
+      <p>{fix.explain}</p>
+      <p className={styles.tryThis}>
+        <strong>다음 리허설 목표</strong> {fix.goal}
+      </p>
+    </div>
+  );
+}
+
+// Each mark has its own color, but the words always say what it is.
+const MARK_STYLE: Record<SentenceMark["kind"], string> = {
+  pause: styles.markPause,
+  lowGaze: styles.markGaze,
+  fast: styles.markFast,
+  skipped: styles.markMissing,
+  unread: styles.markMissing,
+};
+
+function SentenceReport({ outcome }: { outcome: RehearsalOutcome }) {
+  const { section, sentences } = outcome;
+  return (
+    <section className={styles.card}>
+      <h2>문장별로 보기</h2>
+      {outcome.dictationFellBack && <p className={styles.muted}>{DICTATION_FELL_BACK_NOTE}</p>}
+      {section.marks === null ? (
+        <p className={styles.muted}>{NO_DICTATION_SENTENCES_NOTE}</p>
+      ) : (
+        <>
+          <p className={styles.muted}>
+            문장 위치 <span className={styles.basis}>{basisLabel(section.approximate)}</span>
+          </p>
+          <ol className={styles.sentenceList}>
+            {sentences.map((sentence, i) => {
+              const marks = section.marks?.[i] ?? [];
+              return (
+                <li key={i} className={marks.length > 0 ? styles.markedSentence : undefined}>
+                  {marks.length > 0 && (
+                    <span className={styles.markRow}>
+                      {marks.map((mark) => (
+                        <span key={mark.kind} className={`${styles.mark} ${MARK_STYLE[mark.kind]}`}>
+                          {markLabel(mark)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <span>{sentence.text}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
+      {section.quarters ? (
+        <>
+          <h3>구간별 말 속도</h3>
+          <ul className={styles.itemList}>
+            {section.quarters.map((quarter, i) => (
+              <li key={quarter.first}>
+                {i + 1}구간 ({quarter.first + 1}~{quarter.last + 1}번 문장):{" "}
+                {quarter.pace === null ? "말하지 않음" : `분당 ${quarter.pace}음절`}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        section.marks !== null && <p className={styles.muted}>{NO_DICTATION_PACE_NOTE}</p>
+      )}
+      {section.fillers && (
+        <p>
+          군말 {section.fillers.total}번{" "}
+          <span className={styles.tag}>{FILLER_ACCURACY_NOTE}</span>
+          {section.fillers.total > 0 &&
+            `: ${Object.entries(section.fillers.words)
+              .filter(([, count]) => count > 0)
+              .map(([word, count]) => `${word} ${count}`)
+              .join(", ")}`}
+        </p>
+      )}
     </section>
   );
 }
