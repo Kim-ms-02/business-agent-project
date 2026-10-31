@@ -64,7 +64,8 @@ describe("SiteFooter", () => {
   });
 
   it("links only pages that are ready, and has no repository or version links", () => {
-    const ready = new Set(SITE_PAGES.filter((p) => p.ready).map((p) => p.href));
+    // The home address always opens something (question practice until the intro page is built).
+    const ready = new Set(["/", ...SITE_PAGES.filter((p) => p.ready).map((p) => p.href)]);
     for (const link of links(html)) expect(ready.has(link.href), link.href).toBe(true);
     expect(html).not.toContain("GitHub");
     expect(html).not.toContain("버전 기록");

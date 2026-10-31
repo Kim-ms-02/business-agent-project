@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import { QUESTION_COUNT } from "@/lib/coachConfig";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+import DevTools from "./DevTools";
+import DraftProvider from "./DraftProvider";
 import "./globals.css";
+import SiteFooter from "./SiteFooter";
+import SiteHeader from "./SiteHeader";
 
 // next/font downloads these once at dev/build time and serves them from the app, so no font
 // server is asked while the app runs. All three are under the SIL Open Font License 1.1.
@@ -24,7 +28,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <DraftProvider>
+          <SiteHeader />
+          <div id="content" tabIndex={-1}>
+            {children}
+          </div>
+          <SiteFooter />
+          {process.env.NODE_ENV === "development" && <DevTools />}
+        </DraftProvider>
+      </body>
     </html>
   );
 }
