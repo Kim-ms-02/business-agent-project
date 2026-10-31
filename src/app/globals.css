@@ -38,15 +38,6 @@
   --radius-stage: 18px;
   --radius-pill: 999px;
 
-  /* Older names the current screens still use. They go away when the pages are rebuilt (v1.1 step 7). */
-  --background: var(--paper);
-  --foreground: var(--ink);
-  --border: var(--line);
-  --surface: var(--sheet);
-  --accent: var(--ink);
-  --accent-text: var(--paper);
-  --focus-surface: var(--spot-wash);
-
   color-scheme: light;
 }
 

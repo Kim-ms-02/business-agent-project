@@ -103,10 +103,6 @@
   font-size: 1.375rem;
 }
 
-.focus .quote {
-  background: var(--sheet);
-}
-
 .goal {
   font-family: var(--display);
   font-size: 1.25rem;

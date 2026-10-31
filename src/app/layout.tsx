@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import { QUESTION_COUNT } from "@/lib/coachConfig";
-import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import DevTools from "./DevTools";
 import DraftProvider from "./DraftProvider";
 import "./globals.css";

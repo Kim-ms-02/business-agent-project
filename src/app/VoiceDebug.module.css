@@ -8,7 +8,7 @@
   align-items: flex-end;
   gap: 8px;
   max-width: calc(100vw - 32px);
-  color: var(--foreground);
+  color: var(--ink);
   font-size: 0.85rem;
   z-index: 10;
 }
@@ -19,9 +19,9 @@
   max-height: 70vh;
   overflow-y: auto;
   padding: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--sheet);
 }
 
 .tabs {
@@ -33,16 +33,16 @@
 .tab {
   flex: 1;
   padding: 6px 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
   cursor: pointer;
 }
 
 .tab[aria-selected="true"] {
-  border-color: var(--accent);
+  border-color: var(--ink);
   font-weight: 700;
 }
 
@@ -60,7 +60,7 @@
 
 .speaking {
   font-weight: 700;
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .quiet {
@@ -71,13 +71,13 @@
 .meter {
   height: 8px;
   border-radius: 4px;
-  background: var(--border);
+  background: var(--line);
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--ink);
 }
 
 .note {
@@ -93,10 +93,10 @@
 
 .button {
   padding: 6px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
   cursor: pointer;
 }

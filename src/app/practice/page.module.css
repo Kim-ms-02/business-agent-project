@@ -92,12 +92,6 @@
   resize: vertical;
 }
 
-.hint {
-  font-weight: 400;
-  font-size: 0.875rem;
-  color: var(--muted);
-}
-
 .row {
   display: grid;
   grid-template-columns: 1fr 1fr;
