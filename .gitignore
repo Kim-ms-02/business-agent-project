@@ -62,3 +62,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# README 재료 메모 (커밋하지 않음)
+notes/
