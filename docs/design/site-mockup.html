@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>발표 코치 사이트 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@600;800&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a product site with the usual service-site rhythm (hero, scenarios, steps, features, privacy, FAQ, closing CTA),
+   held together by one motif: a rehearsal script marked up in amber pencil. */
+:root {
+  --paper: #f5f6f8;
+  --sheet: #ffffff;
+  --ink: #161b26;
+  --muted: #586172;
+  --line: #dde1e8;
+  --spot: #d9822b;
+  --spot-ink: #8f4e0c;
+  --spot-wash: #fcefdf;
+  --good: #2f6b4f;
+  --good-wash: #e3f1ea;
+  --display: "Noto Serif KR", "AppleMyungjo", serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #11141a; --sheet: #191d26; --ink: #e9ecf2; --muted: #a3abb8; --line: #2b313d;
+    --spot: #f0a64e; --spot-ink: #f3b66f; --spot-wash: #2e2416; --good: #7cc3a0; --good-wash: #16271f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #11141a; --sheet: #191d26; --ink: #e9ecf2; --muted: #a3abb8; --line: #2b313d;
+  --spot: #f0a64e; --spot-ink: #f3b66f; --spot-wash: #2e2416; --good: #7cc3a0; --good-wash: #16271f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.7; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--spot); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.3; text-wrap: balance; margin: 0; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--ink); color: var(--paper); padding: 8px 12px; border-radius: 8px; z-index: 20; }
+.skip:focus { left: 16px; }
+
+.notice { background: var(--ink); color: var(--paper); font-size: 13px; text-align: center; padding: 6px 16px; }
+
+header.site { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1120px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 28px; }
+.brand { font-family: var(--display); font-weight: 800; font-size: 20px; text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.brand i { width: 10px; height: 10px; border-radius: 50%; background: var(--spot); box-shadow: 0 0 0 4px var(--spot-wash); }
+nav.main { display: flex; gap: 4px; flex: 1; }
+nav.main a { text-decoration: none; color: var(--muted); padding: 6px 12px; border-radius: 999px; font-size: 15px; }
+nav.main a:hover { color: var(--ink); }
+nav.main a[aria-current="page"] { color: var(--ink); background: var(--sheet); box-shadow: inset 0 0 0 1px var(--line); }
+.actions { display: flex; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 10px; font: 600 15px var(--body); text-decoration: none; border: 1px solid var(--line); background: var(--sheet); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn.ghost { background: transparent; }
+
+main { max-width: 1120px; margin: 0 auto; padding: 0 24px 40px; }
+section.view { display: none; }
+section.view.on { display: block; }
+.block { padding: 64px 0; border-top: 1px solid var(--line); }
+.block > h2 { font-size: clamp(26px, 3vw, 34px); margin-bottom: 10px; }
+.block > .intro { color: var(--muted); max-width: 38em; margin: 0 0 32px; }
+.eyebrow { font: 500 13px var(--mono); color: var(--spot-ink); letter-spacing: .04em; display: block; margin-bottom: 10px; }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; padding: 64px 0 64px; }
+.hero h1 { font-size: clamp(34px, 4.6vw, 54px); font-weight: 800; margin: 0 0 18px; letter-spacing: -0.02em; }
+.hero h1 em { font-style: normal; background: linear-gradient(transparent 62%, var(--spot-wash) 62%); }
+.hero p.lede { color: var(--muted); font-size: 18px; max-width: 30em; margin: 0 0 28px; }
+.ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+.trust { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 22px; font-size: 13.5px; color: var(--muted); }
+.trust span::before { content: "✓"; color: var(--good); margin-right: 6px; font-weight: 600; }
+
+/* Script motif */
+.script { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 28px 28px 22px 64px; position: relative; box-shadow: 0 24px 48px -32px rgba(20,25,40,.35); margin: 0; }
+.script::before { content: ""; position: absolute; left: 44px; top: 0; bottom: 0; width: 1px; background: var(--spot); opacity: .35; }
+.script .head { font: 500 12px var(--mono); color: var(--muted); display: flex; justify-content: space-between; margin: 0 0 14px -36px; }
+.line { position: relative; margin: 0 0 12px; font-size: 15.5px; }
+.line .n { position: absolute; left: -46px; top: 2px; font: 500 12px var(--mono); color: var(--muted); width: 24px; text-align: right; }
+.mark { display: inline-block; font: 500 12px var(--mono); color: var(--spot-ink); background: var(--spot-wash); border-radius: 4px; padding: 1px 7px; margin-left: 6px; white-space: nowrap; }
+.under { text-decoration: underline wavy var(--spot); text-underline-offset: 5px; text-decoration-thickness: 1.5px; }
+.pause { display: inline-block; font: 500 12px var(--mono); color: var(--spot-ink); border: 1px dashed var(--spot); border-radius: 4px; padding: 0 6px; margin-right: 6px; }
+.question-bubble { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.question-bubble small { font: 500 12px var(--mono); color: var(--muted); }
+.question-bubble p { font-family: var(--display); font-weight: 600; font-size: 18px; margin: 4px 0 0; }
+
+/* Scenarios */
+.scenarios { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.scenario { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 20px; }
+.scenario b { font: 500 12px var(--mono); color: var(--muted); }
+.scenario h3 { font-family: var(--body); font-weight: 600; font-size: 17px; margin: 6px 0 6px; }
+.scenario p { margin: 0; font-size: 14px; color: var(--muted); }
+.scenario.later { background: transparent; border-style: dashed; }
+
+/* Steps */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 14px; background: var(--sheet); overflow: hidden; }
+.step { padding: 26px 26px 28px; }
+.step + .step { border-left: 1px solid var(--line); }
+.step b { font: 500 13px var(--mono); color: var(--spot-ink); }
+.step h3 { font-size: 20px; margin: 6px 0 8px; }
+.step p { margin: 0; color: var(--muted); font-size: 15px; }
+
+/* Feature categories */
+.cats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.cat { border-top: 3px solid var(--ink); padding-top: 18px; }
+.cat .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.cat h3 { font-size: 21px; margin-bottom: 8px; }
+.cat p.why { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+.cat ul { margin: 0; padding-left: 18px; font-size: 15px; }
+.cat li { margin-bottom: 4px; }
+.chip { font: 500 12px var(--mono); padding: 1px 8px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); color: var(--muted); }
+
+/* Privacy */
+.privacy { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 28px 32px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 28px; }
+.privacy h3 { font-family: var(--body); font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.privacy p { margin: 0; font-size: 14px; color: var(--muted); }
+.tag { display: inline-block; font: 500 12px var(--mono); padding: 1px 8px; border-radius: 999px; margin-bottom: 8px; }
+.tag.stay { background: var(--good-wash); color: var(--good); }
+.tag.go { background: var(--spot-wash); color: var(--spot-ink); }
+
+/* FAQ */
+.faq { max-width: 760px; }
+.faq details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+.faq summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font: 500 18px var(--mono); color: var(--muted); }
+.faq details[open] summary::after { content: "−"; }
+.faq details p { margin: 10px 0 0; color: var(--muted); }
+
+/* Closing CTA */
+.closing { background: var(--ink); color: var(--paper); border-radius: 18px; padding: 48px; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; margin: 24px 0 40px; }
+.closing h2 { font-size: clamp(24px, 3vw, 32px); }
+.closing p { margin: 6px 0 0; opacity: .75; }
+.closing .btn.primary { background: var(--paper); color: var(--ink); border-color: var(--paper); }
+
+/* Practice */
+.page-head { padding: 44px 0 20px; display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.page-head h2 { font-size: 30px; }
+.progress { display: flex; gap: 6px; }
+.progress i { width: 40px; height: 6px; border-radius: 3px; background: var(--line); }
+.progress i.now { background: var(--spot); }
+.stage { background: var(--ink); color: var(--paper); border-radius: 18px; padding: 48px 48px 40px; }
+.stage small { font: 500 13px var(--mono); opacity: .7; }
+.stage h3 { font-size: clamp(24px, 3vw, 34px); font-weight: 600; margin: 12px 0 26px; max-width: 26em; }
+.stage .btn { background: transparent; color: var(--paper); border-color: color-mix(in srgb, var(--paper) 35%, transparent); }
+.answer { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 24px; margin-top: 18px; display: grid; gap: 12px; }
+.answer label { font-weight: 600; }
+.answer textarea { width: 100%; min-height: 110px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font: 15px var(--body); background: var(--paper); color: var(--ink); resize: vertical; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row.between { justify-content: space-between; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.rec { display: inline-flex; align-items: center; gap: 8px; }
+.rec i { width: 10px; height: 10px; border-radius: 50%; background: var(--spot); }
+
+/* Report */
+.report-top { display: grid; grid-template-columns: 1.45fr 1fr; gap: 28px; align-items: start; margin-bottom: 28px; }
+.focus { background: var(--spot-wash); border-left: 4px solid var(--spot); border-radius: 0 14px 14px 0; padding: 22px 24px; }
+.focus small { font: 500 12px var(--mono); color: var(--spot-ink); }
+.focus h3 { font-size: 22px; margin: 6px 0 8px; }
+.focus p { margin: 0; }
+.focus .goal { margin-top: 12px; font-family: var(--display); font-size: 20px; font-weight: 600; }
+.summary { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.summary div b { display: block; font: 600 28px var(--mono); }
+.summary div span { font-size: 13px; color: var(--muted); }
+.report-cats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 28px; }
+.rcat { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+.rcat h3 { font-family: var(--body); font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.rcat .why { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.metric { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 14px; padding: 10px 0; border-top: 1px solid var(--line); }
+.metric b { font: 500 14px var(--mono); }
+.metric span { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
+.metric .tip { grid-column: 1 / -1; font-size: 13.5px; color: var(--ink); }
+.metric .tip::before { content: "다음에 해 볼 것 · "; color: var(--spot-ink); font-weight: 600; }
+.pace { margin: 6px 0 4px; }
+.pace svg { width: 100%; height: 96px; display: block; }
+.pace .lbl { display: flex; justify-content: space-between; font: 500 11px var(--mono); color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); margin: 0 0 12px; align-items: center; }
+.fine { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+footer.site { border-top: 1px solid var(--line); background: var(--sheet); }
+.foot { max-width: 1120px; margin: 0 auto; padding: 36px 24px 28px; display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 24px; font-size: 14px; }
+.foot h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.foot ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.foot a { text-decoration: none; }
+.foot a:hover { text-decoration: underline; }
+.foot p { margin: 8px 0 0; color: var(--muted); font-size: 13px; max-width: 26em; }
+.legal { max-width: 1120px; margin: 0 auto; padding: 14px 24px 28px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+
+@media (max-width: 900px) {
+  .hero, .report-top { grid-template-columns: 1fr; }
+  .scenarios { grid-template-columns: 1fr 1fr; }
+  .steps, .cats, .report-cats, .privacy { grid-template-columns: 1fr; }
+  .step + .step { border-left: 0; border-top: 1px solid var(--line); }
+  nav.main { display: none; }
+  .actions .ghost { display: none; }
+  .stage, .closing { padding: 32px 24px; }
+  .script { padding-left: 52px; }
+  .script::before { left: 36px; }
+  .foot { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) { .scenarios { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: no-preference) {
+  .rec i { animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
+<div class="notice">디자인 시안입니다. 내용은 실제 앱 문구와 예시 결과로 채웠어요.</div>
+
+<header class="site">
+  <div class="bar">
+    <a class="brand" href="#home"><i aria-hidden="true"></i>발표 코치</a>
+    <nav class="main" aria-label="주 메뉴">
+      <a href="#home" data-view="home">소개</a>
+      <a href="#practice" data-view="practice">질문 연습</a>
+      <a href="#rehearsal" data-view="rehearsal">리허설 결과</a>
+      <a href="#faq" data-view="faq">자주 묻는 질문</a>
+    </nav>
+    <div class="actions">
+      <a class="btn ghost" href="#rehearsal">결과 예시</a>
+      <a class="btn primary" href="#practice">대본 넣고 시작</a>
+    </div>
+  </div>
+</header>
+
+<main id="content">
+  <!-- HOME -->
+  <section class="view" id="view-home" aria-labelledby="h-home">
+    <div class="hero">
+      <div>
+        <span class="eyebrow">AI 발표 연습 코치</span>
+        <h1 id="h-home">교수님이 묻기 전에<br><em>먼저 질문받아</em> 보세요</h1>
+        <p class="lede">대본을 넣으면 심사위원처럼 질문 3개를 소리로 물어봐요. 다 답하면 대본과 답변을 평가하고, 리허설에서는 어느 문장에서 멈췄는지, 어디서 대본만 보고 읽었는지 짚어 줘요.</p>
+        <div class="ctas">
+          <a class="btn primary" href="#practice">질문 연습 시작</a>
+          <a class="btn" href="#rehearsal">리허설 결과 예시 보기</a>
+        </div>
+        <div class="trust"><span>가입 없이 바로</span><span>리허설 소리는 저장하지 않음</span><span>카메라는 선택</span></div>
+      </div>
+
+      <figure class="script" aria-label="리허설 표시가 달린 대본 예시">
+        <div class="head"><span>리허설 2회차 · 대본 8문장</span><span>0:58 / 1:00</span></div>
+        <p class="line"><span class="n">1</span>안녕하세요. 오늘은 아침 식사가 수업 집중에 주는 영향을 말씀드리겠습니다.</p>
+        <p class="line"><span class="n">2</span>저는 지난 2주 동안 아침을 먹은 날과 먹지 않은 날의 <span class="under">집중 시간을 직접 기록했습니다.</span><span class="mark">시선 낮음</span></p>
+        <p class="line"><span class="n">3</span>아침을 먹은 날은 평균 40분, 먹지 않은 날은 25분에 그쳤습니다.<span class="mark">빠름 · 분당 372음절</span></p>
+        <p class="line"><span class="n">4</span><span class="pause">멈춤 5초</span>물론 한 사람의 기록이라 모두에게 같다고 말할 수는 없습니다.</p>
+        <div class="question-bubble">
+          <small>질문 1 / 3 · 근거</small>
+          <p>먹은 날 40분, 먹지 않은 날 25분이라고 하셨는데, 집중한 시간은 무엇을 기준으로 재셨나요?</p>
+        </div>
+      </figure>
+    </div>
+
+    <div class="block">
+      <span class="eyebrow">이런 순간을 연습해요</span>
+      <h2>질문이 오는 발표라면 어디든</h2>
+      <p class="intro">발표가 끝난 뒤 받는 질문까지가 발표예요. 미리 받아 보고, 미리 답해 보세요.</p>
+      <div class="scenarios">
+        <div class="scenario"><b>수업</b><h3>조별 과제 발표</h3><p>근거 없는 주장, 출처 없는 숫자를 질문으로 미리 짚어요.</p></div>
+        <div class="scenario"><b>프로젝트</b><h3>시연과 질의응답</h3><p>"왜 이 방법을 골랐나요?"에 답하는 연습을 해요.</p></div>
+        <div class="scenario"><b>졸업·연구</b><h3>중간·최종 발표</h3><p>결론이 근거보다 넓어진 곳을 찾아 범위를 좁혀요.</p></div>
+        <div class="scenario later"><b>준비 중</b><h3>면접 답변</h3><p>자기소개와 지원 동기 연습은 다음 버전에서 다뤄요.</p></div>
+      </div>
+    </div>
+
+    <div class="block" id="how">
+      <span class="eyebrow">사용 방법</span>
+      <h2>대본 하나로 세 번 연습해요</h2>
+      <p class="intro">처음엔 질문으로, 그다음엔 리허설로. 결과는 매번 "먼저 고칠 한 가지"로 정리돼요.</p>
+      <div class="steps">
+        <div class="step"><b>01 · 대본</b><h3>대본을 넣어요</h3><p>발표할 말을 그대로 붙여 넣고, 듣는 사람과 제한 시간을 적어요.</p></div>
+        <div class="step"><b>02 · 질문</b><h3>소리로 묻고, 말로 답해요</h3><p>근거, 다른 설명, 개념과 범위. 대본의 약한 곳을 겨냥한 질문 3개가 하나씩 나와요.</p></div>
+        <div class="step"><b>03 · 리허설</b><h3>문장마다 짚어 줘요</h3><p>멈춘 곳, 빨라진 문장, 대본만 보고 읽은 문장을 대본 위에 표시해요.</p></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <span class="eyebrow">무엇을 봐 주나요</span>
+      <h2>내용, 전달, 시선을 나눠서 봐요</h2>
+      <p class="intro">숫자는 정해 둔 기준표로 코드가 재고, 코치는 그 숫자만 근거로 설명해요. 대본에 없는 숫자나 "긴장해 보여요" 같은 판단은 쓰지 않아요.</p>
+      <div class="cats">
+        <div class="cat">
+          <div class="tag-row"><span class="chip">질문 연습</span></div>
+          <h3>내용</h3>
+          <p class="why">질문은 주장과 근거 사이가 빈 곳에서 나와요.</p>
+          <ul>
+            <li>잘한 점 2개, 고칠 점 3개 (대본 인용)</li>
+            <li>고칠 점마다 "이렇게 말해 보기"</li>
+            <li>답변 판정: 좋음 · 보완 필요 · 부족</li>
+          </ul>
+        </div>
+        <div class="cat">
+          <div class="tag-row"><span class="chip">리허설 · 마이크</span></div>
+          <h3>전달</h3>
+          <p class="why">같은 내용도 빠르거나 오래 멈추면 놓쳐요.</p>
+          <ul>
+            <li>말 속도: 분당 250~330음절 권장</li>
+            <li>3초 넘게 멈춘 곳과 그 문장</li>
+            <li>끝으로 갈수록 작아지는 목소리, 제한 시간</li>
+          </ul>
+        </div>
+        <div class="cat">
+          <div class="tag-row"><span class="chip">리허설 · 카메라 선택</span></div>
+          <h3>시선과 자세</h3>
+          <p class="why">대본만 보고 읽으면 청중과 멀어져요.</p>
+          <ul>
+            <li>화면을 본 시간, 시선이 낮았던 문장</li>
+            <li>평소보다 웃은 시간</li>
+            <li>고개 움직임, 화면 안 자세</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="block" id="privacy">
+      <span class="eyebrow">개인정보</span>
+      <h2>무엇이 어디로 가는지 먼저 알려 드려요</h2>
+      <p class="intro">녹음과 영상은 저장하지 않아요. 밖으로 나가는 것은 아래 두 가지뿐이에요.</p>
+      <div class="privacy">
+        <div><span class="tag stay">브라우저 안</span><h3>리허설 소리와 카메라 영상</h3><p>저장하지 않고 브라우저 밖으로 보내지 않아요. 말한 구간과 얼굴 값만 계산해요.</p></div>
+        <div><span class="tag go">구글 서버</span><h3>말로 한 답변과 켜 둔 받아쓰기</h3><p>받아쓰기를 위해 목소리가 구글 서버로 전송돼요. 이 앱은 녹음을 저장하지 않아요.</p></div>
+        <div><span class="tag go">Claude API</span><h3>대본, 답변 글, 점수 숫자</h3><p>평가를 위해 보내요. 영상, 사진, 소리는 보내지 않아요.</p></div>
+      </div>
+    </div>
+
+    <div class="closing">
+      <div><h2>다음 발표 대본, 지금 넣어 보세요</h2><p>질문 3개를 받는 데 1분이면 돼요.</p></div>
+      <a class="btn primary" href="#practice">질문 연습 시작</a>
+    </div>
+  </section>
+
+  <!-- PRACTICE -->
+  <section class="view" id="view-practice" aria-labelledby="h-practice">
+    <div class="page-head">
+      <h2 id="h-practice">질문 연습</h2>
+      <div class="progress" aria-label="질문 1 / 3"><i class="now"></i><i></i><i></i></div>
+    </div>
+    <div class="stage">
+      <small>질문 1 / 3 · 근거</small>
+      <h3>먹은 날 40분, 먹지 않은 날 25분이라고 하셨는데, 집중한 시간은 무엇을 기준으로 어떻게 재셨나요?</h3>
+      <div class="row"><button class="btn" type="button">다시 듣기</button></div>
+    </div>
+    <div class="answer">
+      <label for="ans">내 답</label>
+      <textarea id="ans">첫 수업 시간 동안 휴대폰 타이머로 딴생각 없이 필기한 시간을 쟀습니다.</textarea>
+      <div class="row between">
+        <div class="row">
+          <button class="btn rec" type="button"><i aria-hidden="true"></i>듣는 중 · 그만 말하기</button>
+          <button class="btn" type="button">다시 답하기</button>
+        </div>
+        <button class="btn primary" type="button">다음 질문</button>
+      </div>
+      <p class="hint">말로 답하면 받아쓰기를 위해 목소리가 구글 서버로 전송돼요. 이 앱은 녹음을 저장하지 않아요.</p>
+    </div>
+  </section>
+
+  <!-- REHEARSAL REPORT -->
+  <section class="view" id="view-rehearsal" aria-labelledby="h-rehearsal">
+    <div class="page-head">
+      <div><span class="eyebrow">리허설 2회차 · 0분 58초</span><h2 id="h-rehearsal">리허설 결과</h2></div>
+      <div class="row"><a class="btn" href="#practice">다시 리허설</a><a class="btn primary" href="#home">처음으로</a></div>
+    </div>
+
+    <div class="report-top">
+      <div class="focus">
+        <small>가장 먼저 고칠 한 가지 · 침묵</small>
+        <h3>"물론 한 사람의 기록이라" 앞에서 5초 멈췄어요</h3>
+        <p>3번 문장의 숫자를 말한 뒤 다음 문장으로 넘어가는 자리예요. 3번과 4번 문장을 이어서 두 번 소리 내어 읽어 두세요.</p>
+        <p class="goal">다음 목표: 멈춤 5초 → 3초 이내</p>
+      </div>
+      <div class="summary" aria-label="요약">
+        <div><b>81</b><span>말투 점수</span></div>
+        <div><b>69</b><span>얼굴 행동 점수 · 참고용</span></div>
+        <div><b>1</b><span>3초 넘게 멈춘 곳</span></div>
+        <div><b>45%</b><span>화면을 본 시간</span></div>
+      </div>
+    </div>
+
+    <div class="report-cats">
+      <div class="rcat">
+        <h3>전달 · 말 속도</h3>
+        <p class="why">권장 범위는 분당 250~330음절이에요.</p>
+        <div class="pace" aria-label="구간별 분당 음절: 1구간 290, 2구간 318, 3구간 372, 4구간 335">
+          <svg viewBox="0 0 300 96" preserveAspectRatio="none" role="img">
+            <rect x="0" y="22" width="300" height="34" fill="var(--good-wash)"></rect>
+            <polyline points="37,52 112,40 187,16 262,38" fill="none" stroke="var(--ink)" stroke-width="2.5"></polyline>
+            <circle cx="37" cy="52" r="4" fill="var(--ink)"></circle>
+            <circle cx="112" cy="40" r="4" fill="var(--ink)"></circle>
+            <circle cx="187" cy="16" r="5" fill="var(--spot)"></circle>
+            <circle cx="262" cy="38" r="4" fill="var(--ink)"></circle>
+          </svg>
+          <div class="lbl"><span>1구간 290</span><span>2구간 318</span><span>3구간 372</span><span>4구간 335</span></div>
+        </div>
+        <div class="metric">말 속도<b>3 / 4</b><span>분당 342음절 · 3구간이 가장 빨랐어요</span><p class="tip" style="margin:0">3구간 숫자 문장 앞에서 한 박자 쉬고 말해 보세요.</p></div>
+        <div class="metric">제한 시간<b>3 / 4</b><span>걸린 시간 0분 58초 / 제한 1분 0초</span></div>
+      </div>
+      <div class="rcat">
+        <h3>전달 · 침묵과 목소리</h3>
+        <p class="why">3초 넘게 멈추면 듣는 사람이 흐름을 놓쳐요.</p>
+        <div class="metric">침묵<b>3 / 4</b><span>3초 넘게 멈춘 곳 1번 · 4번 문장 앞 5초</span><p class="tip" style="margin:0">4번 문장 첫 마디를 대본에 굵게 표시해 두세요.</p></div>
+        <div class="metric">목소리 크기<b>4 / 4</b><span>끝부분 목소리 크기가 처음의 92%</span></div>
+      </div>
+      <div class="rcat">
+        <h3>시선과 자세</h3>
+        <p class="why">연습용 참고 점수예요. 채점이나 평가에 쓰지 마세요.</p>
+        <div class="metric">시선<b>2 / 4</b><span>화면을 본 시간 45% · 2번 문장에서 낮음</span><p class="tip" style="margin:0">2번 문장을 외워서 화면을 보며 말해 보세요.</p></div>
+        <div class="metric">표정<b>1 / 4</b><span>평소보다 웃은 시간 2%</span></div>
+      </div>
+    </div>
+
+    <div class="legend"><span class="mark">시선 낮음</span><span class="mark">빠름</span><span class="pause">멈춤</span><span class="mark">읽지 않음</span><span>· 위치는 받아쓰기로 맞췄어요</span></div>
+    <figure class="script" aria-label="문장별로 보기">
+      <div class="head"><span>문장별로 보기</span><span>8문장</span></div>
+      <p class="line"><span class="n">1</span>안녕하세요. 오늘은 아침 식사가 수업 집중에 주는 영향을 말씀드리겠습니다.</p>
+      <p class="line"><span class="n">2</span>저는 지난 2주 동안 아침을 먹은 날과 먹지 않은 날의 <span class="under">집중 시간을 직접 기록했습니다.</span><span class="mark">시선 낮음</span></p>
+      <p class="line"><span class="n">3</span>아침을 먹은 날은 첫 수업에서 평균 40분 동안 집중했고, 먹지 않은 날은 25분에 그쳤습니다.<span class="mark">빠름 · 분당 372음절</span></p>
+      <p class="line"><span class="n">4</span><span class="pause">멈춤 5초</span>물론 한 사람의 기록이라 모두에게 같다고 말할 수는 없습니다.</p>
+      <p class="line"><span class="n">5</span>하지만 간단한 바나나 하나라도 먹고 수업에 들어가는 것을 추천합니다.</p>
+      <p class="line"><span class="n">6</span>내일 아침, 여러분도 한 번 시험해 보세요.</p>
+      <p class="line"><span class="n">7</span>감사합니다.<span class="mark">읽지 않음</span></p>
+    </figure>
+    <p class="fine" style="margin-top:12px">기준선은 과학적으로 정한 값이 아니라 설계 값이에요. 대본에서 벗어나 즉흥으로 말하면 말 속도가 틀릴 수 있어요.</p>
+  </section>
+
+  <!-- FAQ -->
+  <section class="view" id="view-faq" aria-labelledby="h-faq">
+    <div class="page-head"><h2 id="h-faq">자주 묻는 질문</h2></div>
+    <div class="faq">
+      <details open><summary>녹음이나 영상이 저장되나요?</summary><p>저장하지 않아요. 리허설 소리와 카메라 영상은 브라우저 안에서만 계산하고, 말로 답한 답변과 직접 켠 받아쓰기만 구글 서버로 전송돼요.</p></details>
+      <details><summary>카메라 없이도 쓸 수 있나요?</summary><p>네. 카메라는 선택이에요. 끄면 얼굴 행동 점수만 빠지고 질문 연습과 말투 점수는 그대로 나와요.</p></details>
+      <details><summary>점수는 어떻게 매기나요?</summary><p>정해 둔 기준표로 코드가 계산해요. 코치는 그 숫자만 근거로 설명하고 점수를 바꾸지 않아요. 기준선은 설계 값이라 참고로만 봐 주세요.</p></details>
+      <details><summary>어떤 브라우저에서 되나요?</summary><p>크롬과 엣지를 권장해요. 받아쓰기는 이 두 브라우저에서만 되고, 다른 브라우저에서는 글로 답할 수 있어요.</p></details>
+      <details><summary>면접 연습도 되나요?</summary><p>지금은 발표와 질의응답만 다뤄요. 면접 답변 연습은 다음 버전에서 준비하고 있어요.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="foot">
+    <div><a class="brand" href="#home"><i aria-hidden="true"></i>발표 코치</a><p>연습을 돕는 도구예요. 평가 내용이 맞는지는 직접 판단해 주세요.</p></div>
+    <div><h4>연습</h4><ul><li><a href="#practice">질문 연습</a></li><li><a href="#rehearsal">리허설 결과 예시</a></li></ul></div>
+    <div><h4>안내</h4><ul><li><a href="#home">사용 방법</a></li><li><a href="#faq">자주 묻는 질문</a></li></ul></div>
+    <div><h4>프로젝트</h4><ul><li>GitHub 저장소</li><li>버전 기록</li></ul></div>
+  </div>
+  <div class="legal">기준선은 설계 값이에요 · 얼굴 행동 점수는 연습용 참고 점수예요</div>
+</footer>
+
+<script>
+(function () {
+  var views = ["home", "practice", "rehearsal", "faq"];
+  function show() {
+    var name = (location.hash || "#home").slice(1);
+    if (views.indexOf(name) < 0) name = "home";
+    views.forEach(function (v) {
+      document.getElementById("view-" + v).classList.toggle("on", v === name);
+    });
+    document.querySelectorAll("nav.main a").forEach(function (a) {
+      if (a.dataset.view === name) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  window.addEventListener("hashchange", function () { show(); window.scrollTo(0, 0); });
+  show();
+})();
+</script>
+</body>
+</html>
