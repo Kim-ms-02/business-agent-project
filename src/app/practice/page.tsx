@@ -77,32 +77,15 @@ import {
 import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "./page.module.css";
 import { useDraft } from "../DraftProvider";
-
-type Phase =
-  | { name: "input"; error: string | null }
-  | { name: "rehearsal" }
-  | { name: "preparing"; retrying: boolean }
-  | { name: "failed"; message: string }
-  | { name: "practice"; index: number }
-  | { name: "evaluating"; retrying: boolean }
-  | { name: "evaluationFailed"; message: string }
-  | { name: "result"; evaluations: AnswerEvaluation[]; notices: string[] };
-
-// Kept hidden until the final evaluation screen.
-interface Prepared {
-  review: CheckedReview;
-  notices: string[];
-  estimatedSeconds: number;
-}
+import { usePractice } from "../PracticeProvider";
 
 const SERVER_UNREACHABLE = "앱 서버에 연결하지 못했어요. 서버가 켜져 있는지 확인하고 다시 시도해 주세요.";
 
 export default function PracticePage() {
   // The inputs live in the site layout, so they stay while the visitor moves between pages.
   const { script, setScript, topic, setTopic, audience, setAudience, limitMinutes, setLimitMinutes } = useDraft();
-  const [phase, setPhase] = useState<Phase>({ name: "input", error: null });
-  const [prepared, setPrepared] = useState<Prepared | null>(null);
-  const [answers, setAnswers] = useState<string[]>([]);
+  // Questions, answers, and results live there too, so leaving the page does not lose them.
+  const { phase, setPhase, prepared, setPrepared, answers, setAnswers } = usePractice();
 
   const limitSeconds = Math.round(Number(limitMinutes) * 60);
 
@@ -196,8 +179,13 @@ export default function PracticePage() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <h1>발표 코치</h1>
-        <p>대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 물어봐요. 다 답하면 대본과 답변 평가를 보여 줘요.</p>
+        <div>
+          <h1>질문 연습</h1>
+          <p>대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 물어봐요. 다 답하면 대본과 답변 평가를 보여 줘요.</p>
+        </div>
+        {phase.name === "practice" && prepared && (
+          <ProgressBar index={phase.index} total={prepared.review.questions.length} />
+        )}
       </header>
 
       {phase.name === "input" && (
@@ -403,17 +391,20 @@ function PracticeQuestion({
   const isLast = index + 1 === total;
 
   return (
-    <section className={styles.card} aria-live="polite">
-      <p className={styles.progress}>
-        질문 {index + 1} / {total}
-      </p>
-      <p className={styles.question}>{question.question}</p>
-      <div className={styles.actions}>
-        <button className={styles.secondary} type="button" onClick={readAgain}>
-          다시 듣기
-        </button>
-      </div>
+    <div className={styles.practice} aria-live="polite">
+      <section className={styles.stage}>
+        <p className={styles.stageLabel}>
+          질문 {index + 1} / {total} · {question.type}
+        </p>
+        <h2 className={styles.question}>{question.question}</h2>
+        <div className={styles.actions}>
+          <button className={styles.stageButton} type="button" onClick={readAgain}>
+            다시 듣기
+          </button>
+        </div>
+      </section>
 
+      <section className={styles.answerCard}>
       <label className={styles.field}>
         내 답
         <textarea
@@ -455,7 +446,19 @@ function PracticeQuestion({
           처음으로
         </button>
       </div>
-    </section>
+      </section>
+    </div>
+  );
+}
+
+// Which question is being answered, as bars and in words (the label says the number).
+function ProgressBar({ index, total }: { index: number; total: number }) {
+  return (
+    <div className={styles.progressBar} role="img" aria-label={`질문 ${index + 1} / ${total}`}>
+      {Array.from({ length: total }, (_, i) => (
+        <i key={i} className={i < index ? styles.done : i === index ? styles.now : undefined} />
+      ))}
+    </div>
   );
 }
 

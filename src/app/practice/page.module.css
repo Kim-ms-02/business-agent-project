@@ -1,38 +1,64 @@
+/* Question practice page (v1.1 step 4), after docs/design/site-mockup.html. The rehearsal parts
+   further down still use these shared shapes until the rehearsal page is rebuilt (v1.1 step 5). */
+
 .page {
-  max-width: 680px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: 40px 16px 72px;
+  padding: 0 var(--gutter) var(--space-xl);
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--space-md);
 }
 
 .header {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 44px 0 var(--space-xs);
 }
 
 .header h1 {
-  font-size: 1.375rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--accent);
+  font-size: 1.875rem;
+  font-weight: 800;
 }
 
 .header p {
+  margin-top: 6px;
   color: var(--muted);
   font-size: 0.9375rem;
 }
 
-/* One sheet of paper per screen, like a script on a music stand. */
+/* Progress through the questions. The bar is drawn; its label says the number in words. */
+.progressBar {
+  display: flex;
+  gap: 6px;
+}
+
+.progressBar i {
+  width: 40px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.progressBar .done {
+  background: var(--muted);
+}
+
+.progressBar .now {
+  background: var(--spot);
+}
+
+/* A sheet of paper for the inputs and messages. */
 .form {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
   background: var(--sheet);
 }
 
@@ -47,12 +73,12 @@
 .field input,
 .field textarea {
   min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--paper);
   font-size: 1rem;
   font-weight: 400;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--background);
 }
 
 .field input::placeholder,
@@ -84,28 +110,31 @@
 
 .actions {
   display: flex;
-  gap: 10px;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
 .primary,
-.secondary {
+.secondary,
+.stageButton {
   min-height: 44px;
-  padding: 10px 20px;
-  border-radius: 4px;
+  padding: 0 20px;
+  border-radius: var(--radius-button);
   font-weight: 600;
+  font-size: 0.9375rem;
   cursor: pointer;
 }
 
 .primary {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--accent-text);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .secondary {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   background: var(--sheet);
+  color: var(--ink);
 }
 
 .primary:disabled,
@@ -117,55 +146,82 @@
 .alert {
   padding: 12px 14px;
   border-left: 4px solid var(--danger);
-  border-radius: 4px;
+  border-radius: 0 var(--radius-button) var(--radius-button) 0;
   background: var(--danger-surface);
   color: var(--danger);
 }
 
 .status {
-  padding: 48px 24px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: var(--space-xl) 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
   background: var(--sheet);
   text-align: center;
+  font-family: var(--display);
   font-size: 1.25rem;
   font-weight: 600;
 }
 
 .status p:last-child {
+  font-family: var(--body);
   font-size: 0.9375rem;
   font-weight: 400;
   color: var(--muted);
 }
 
 .card {
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--sheet);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  padding: var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--sheet);
 }
 
-.progress {
-  color: var(--accent);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+/* One question at a time: a dark stage for the question, then the answer sheet below. */
+.practice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.stage {
+  padding: var(--space-xl) var(--space-xl) 40px;
+  border-radius: var(--radius-stage);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.stageLabel {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.8125rem;
 }
 
 /* The question is the one thing to listen to, so it is the largest text on the screen. */
 .question {
-  font-size: 1.5rem;
+  max-width: 26em;
+  margin: 12px 0 26px;
+  font-size: clamp(1.375rem, 3vw, 2rem);
   font-weight: 600;
-  line-height: 1.5;
-  letter-spacing: -0.01em;
+  line-height: 1.45;
 }
 
-.card .question + .actions {
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--border);
+.stageButton {
+  border: 1px solid color-mix(in srgb, var(--paper) 45%, transparent);
+  background: transparent;
+  color: var(--paper);
+}
+
+.answerCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--sheet);
 }
 
 .answer {
@@ -177,7 +233,9 @@
   font-size: 0.9375rem;
 }
 
+/* Final evaluation */
 .answerQuestion {
+  font-family: var(--display);
   font-weight: 600;
   line-height: 1.6;
 }
@@ -190,49 +248,47 @@
 
 .card h2,
 .report h2 {
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 1.375rem;
+  font-weight: 800;
 }
 
 .report h3 {
   margin-top: 10px;
   padding-top: 14px;
-  border-top: 1px solid var(--border);
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--accent);
+  border-top: 1px solid var(--line);
+  font-size: 1.0625rem;
+  font-weight: 600;
 }
 
 .itemList {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding-left: 22px;
+  padding-left: 24px;
 }
 
-.itemList li {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* Kept as list items so the numbers show; spacing comes from the children instead of flex. */
+.itemList li > * + * {
+  margin-top: 8px;
 }
 
 .itemList li::marker {
+  font-family: var(--mono);
   color: var(--muted);
-  font-weight: 600;
 }
 
 .tag {
-  color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  color: var(--spot-ink);
 }
 
 .quote {
   padding: 8px 14px;
-  border-left: 3px solid var(--border);
-  border-radius: 0 4px 4px 0;
-  background: var(--background);
+  border-left: 3px solid var(--line);
+  border-radius: 0 var(--radius-mark) var(--radius-mark) 0;
+  background: var(--paper);
   overflow-wrap: anywhere;
 }
 
@@ -250,18 +306,18 @@
   color: var(--warning-text);
 }
 
-/* What to say or do next: the part a nervous student should see first in each item. */
+/* What to say or do next: the part to read first in each item. */
 .tryThis {
   padding: 10px 14px;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 4px 4px 0;
-  background: var(--focus-surface);
+  border-left: 4px solid var(--spot);
+  border-radius: 0 var(--radius-button) var(--radius-button) 0;
+  background: var(--spot-wash);
 }
 
 .tryThis strong {
   display: block;
   font-size: 0.875rem;
-  color: var(--accent);
+  color: var(--spot-ink);
 }
 
 .details {
@@ -291,18 +347,21 @@
   font-weight: 700;
 }
 
+@media (max-width: 899px) {
+  .stage {
+    padding: 32px 24px;
+  }
+}
+
 @media (max-width: 520px) {
   .row {
     grid-template-columns: 1fr;
   }
 
   .form,
-  .card {
+  .card,
+  .answerCard {
     padding: 18px;
-  }
-
-  .question {
-    font-size: 1.3125rem;
   }
 
   .detailRow {

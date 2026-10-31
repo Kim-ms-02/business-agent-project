@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import DraftProvider from "@/app/DraftProvider";
 import Home from "@/app/page";
+import PracticeProvider from "@/app/PracticeProvider";
 import PracticePage from "@/app/practice/page";
 import SiteFooter from "@/app/SiteFooter";
 import { SiteNavBar } from "@/app/SiteHeader";
@@ -76,7 +77,9 @@ describe("shared inputs", () => {
   const draft = { script: "안녕하세요 저희 팀은 급식 앱을 만들었어요.", topic: "급식 앱", audience: "1학년", limitMinutes: "2" };
 
   it("shows the shared script, topic, audience, and time limit on the practice page", () => {
-    const html = renderToStaticMarkup(createElement(DraftProvider, { initial: draft }, createElement(PracticePage)));
+    const html = renderToStaticMarkup(
+      createElement(DraftProvider, { initial: draft }, createElement(PracticeProvider, null, createElement(PracticePage))),
+    );
     expect(html).toContain(`>${draft.script}</textarea>`);
     expect(html).toContain(`value="${draft.topic}"`);
     expect(html).toContain(`value="${draft.audience}"`);

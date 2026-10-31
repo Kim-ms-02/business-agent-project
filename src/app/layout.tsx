@@ -5,6 +5,7 @@ import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import DevTools from "./DevTools";
 import DraftProvider from "./DraftProvider";
 import "./globals.css";
+import PracticeProvider from "./PracticeProvider";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 
@@ -30,12 +31,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="ko" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
       <body>
         <DraftProvider>
-          <SiteHeader />
-          <div id="content" tabIndex={-1}>
-            {children}
-          </div>
-          <SiteFooter />
-          {process.env.NODE_ENV === "development" && <DevTools />}
+          <PracticeProvider>
+            <SiteHeader />
+            <div id="content" tabIndex={-1}>
+              {children}
+            </div>
+            <SiteFooter />
+            {process.env.NODE_ENV === "development" && <DevTools />}
+          </PracticeProvider>
         </DraftProvider>
       </body>
     </html>
