@@ -126,7 +126,7 @@ export default function PracticePage() {
       <header className={styles.header}>
         <div>
           <h1>질문 연습</h1>
-          <p>대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 물어봐요. 다 답하면 대본과 답변 평가를 보여 줘요.</p>
+          <p>대본을 넣으면 청중처럼 질문 {QUESTION_COUNT}개를 물어봐요. 다 답하면 대본과 답변 평가를 보여 줘요.</p>
         </div>
         {phase.name === "practice" && prepared && (
           <ProgressBar index={phase.index} total={prepared.review.questions.length} />

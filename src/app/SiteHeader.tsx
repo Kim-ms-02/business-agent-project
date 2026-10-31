@@ -16,7 +16,7 @@ export function SiteNavBar({ current }: { current: string }) {
       <div className={styles.bar}>
         <Link className={styles.brand} href="/">
           <i aria-hidden="true" />
-          발표 코치
+          발표 연습실
         </Link>
         <nav className={styles.nav} aria-label="주 메뉴">
           {READY_PAGES.map((page) => (

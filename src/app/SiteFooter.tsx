@@ -21,7 +21,7 @@ export default function SiteFooter() {
         <div>
           <Link className={styles.brand} href="/">
             <i aria-hidden="true" />
-            발표 코치
+            발표 연습실
           </Link>
           <p>연습을 돕는 도구예요. 평가 내용이 맞는지는 직접 판단해 주세요.</p>
         </div>
