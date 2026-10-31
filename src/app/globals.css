@@ -1,40 +1,97 @@
-/* Colors and contrast values are recorded in docs/design-notes.md. */
+/* Colors, fonts, and spacing from the site mockup (docs/design/site-mockup.html).
+   Contrast values are recorded in docs/design-notes.md and checked by tests/designTokens.test.ts. */
 :root {
-  --background: #f2f4f3;
+  --paper: #f5f6f8;
   --sheet: #ffffff;
-  --foreground: #1e2b2f;
-  --muted: #55636a;
-  --border: #c9d1ce;
-  --surface: var(--sheet);
-  --accent: #2c5f55;
-  --accent-text: #ffffff;
-  --focus-surface: #e2ede8;
+  --ink: #161b26;
+  --muted: #586172;
+  --line: #dde1e8;
+  --spot: #d9822b;
+  --spot-ink: #8f4e0c;
+  --spot-wash: #fcefdf;
+  --good: #2f6b4f;
+  --good-wash: #e3f1ea;
   --danger: #a3291f;
   --danger-surface: #fbeae7;
   --warning: #b88a00;
   --warning-surface: #fff3cc;
   --warning-text: #6e5200;
+  /* The light orange is under 3:1 on paper, so the ring uses the dark orange. */
+  --focus-ring: var(--spot-ink);
+
+  --display: var(--font-serif-kr), "AppleMyungjo", serif;
+  --body: var(--font-plex-sans-kr), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 18px;
+  --space-lg: 28px;
+  --space-xl: 48px;
+  --space-section: 64px;
+  --page-max: 1120px;
+  --gutter: 24px;
+  --radius-mark: 4px;
+  --radius-button: 10px;
+  --radius-card: 14px;
+  --radius-stage: 18px;
+  --radius-pill: 999px;
+
+  /* Older names the current screens still use. They go away when the pages are rebuilt (v1.1 step 7). */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --border: var(--line);
+  --surface: var(--sheet);
+  --accent: var(--ink);
+  --accent-text: var(--paper);
+  --focus-surface: var(--spot-wash);
+
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #141a1b;
-    --sheet: #1c2325;
-    --foreground: #e4ebe9;
-    --muted: #a2b0b3;
-    --border: #36423f;
-    --accent: #8cc7b6;
-    --accent-text: #0f211c;
-    --focus-surface: #1f3530;
+  :root:not([data-theme="light"]) {
+    --paper: #11141a;
+    --sheet: #191d26;
+    --ink: #e9ecf2;
+    --muted: #a3abb8;
+    --line: #2b313d;
+    --spot: #f0a64e;
+    --spot-ink: #f3b66f;
+    --spot-wash: #2e2416;
+    --good: #7cc3a0;
+    --good-wash: #16271f;
     --danger: #f2b3ab;
     --danger-surface: #3a1c19;
     --warning: #d8ae3a;
     --warning-surface: #362c12;
     --warning-text: #f0d47e;
-  }
-
-  html {
     color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #11141a;
+  --sheet: #191d26;
+  --ink: #e9ecf2;
+  --muted: #a3abb8;
+  --line: #2b313d;
+  --spot: #f0a64e;
+  --spot-ink: #f3b66f;
+  --spot-wash: #2e2416;
+  --good: #7cc3a0;
+  --good-wash: #16271f;
+  --danger: #f2b3ab;
+  --danger-surface: #3a1c19;
+  --warning: #d8ae3a;
+  --warning-surface: #362c12;
+  --warning-text: #f0d47e;
+  color-scheme: dark;
+}
+
+@media (max-width: 480px) {
+  :root {
+    --gutter: 16px;
   }
 }
 
@@ -46,15 +103,20 @@
 
 body {
   min-height: 100vh;
-  color: var(--foreground);
-  background: var(--background);
-  font-family:
-    "Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--body);
   font-size: 1rem;
   line-height: 1.7;
   word-break: keep-all;
   overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--display);
+  line-height: 1.3;
+  text-wrap: balance;
 }
 
 button,
@@ -65,6 +127,6 @@ textarea {
 }
 
 :focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
