@@ -115,6 +115,8 @@ export default function RehearsalPage() {
   const { script } = useDraft();
   // The last result lives in the site layout, so it is still here after visiting another page.
   const { kept, setKept } = useRehearsal();
+  // Whether the input box is open at the rehearsal start. It is open on a first visit.
+  const [editing, setEditing] = useState(true);
 
   /** Scores, reason numbers, and sentence marks for the coach; nothing when speech was too short to score. */
   function coachSummary(outcome: RehearsalOutcome): DeliverySummary | null {
@@ -169,17 +171,32 @@ export default function RehearsalPage() {
             if (summary) void askCoach(kept.outcome, summary);
           }}
           // Both go back to the rehearsal start; question practice is left as it is.
-          onAgain={() => setKept(null)}
-          onRestart={() => setKept(null)}
+          onAgain={() => {
+            setEditing(false);
+            setKept(null);
+          }}
+          onEdit={() => {
+            setEditing(true);
+            setKept(null);
+          }}
         />
       ) : (
-        <Rehearsal onFinished={finished} />
+        <Rehearsal onFinished={finished} editing={editing} onEdit={() => setEditing(true)} />
       )}
     </main>
   );
 }
 
-function Rehearsal({ onFinished }: { onFinished: (outcome: RehearsalOutcome) => void }) {
+function Rehearsal({
+  onFinished,
+  editing,
+  onEdit,
+}: {
+  onFinished: (outcome: RehearsalOutcome) => void;
+  /** The input box is open before starting; otherwise the script is shown to read, with 대본 고치기. */
+  editing: boolean;
+  onEdit: () => void;
+}) {
   const { script, limitMinutes } = useDraft();
   const limitSeconds = limitSecondsOf(limitMinutes);
   const [step, setStep] = useState<RehearsalStep>({ name: "ready", error: null });
@@ -400,7 +417,7 @@ function Rehearsal({ onFinished }: { onFinished: (outcome: RehearsalOutcome) => 
   // With the camera on, the rehearsal waits for a usable reference pose (or for the camera to be turned off).
   const cameraBlocksStart = camera.name === "starting" || camera.name === "measuring" || camera.name === "baselineFailed";
 
-  const editable = step.name === "ready" || step.name === "starting";
+  const editable = editing && (step.name === "ready" || step.name === "starting");
 
   return (
     <>
@@ -506,6 +523,11 @@ function Rehearsal({ onFinished }: { onFinished: (outcome: RehearsalOutcome) => 
               {step.name === "starting" ? "마이크 켜는 중…" : "리허설 시작"}
             </button>
           )}
+          {!editing && step.name === "ready" && (
+            <button className={styles.secondary} type="button" onClick={onEdit}>
+              대본 고치기
+            </button>
+          )}
         </div>
         <p className={styles.muted}>{dictationOn ? DICTATION_ON_NOTICE : REHEARSAL_NOTICE}</p>
       </section>
@@ -518,13 +540,13 @@ function DeliveryReport({
   coach,
   onRetryCoach,
   onAgain,
-  onRestart,
+  onEdit,
 }: {
   outcome: RehearsalOutcome;
   coach: CoachState;
   onRetryCoach: () => void;
   onAgain: () => void;
-  onRestart: () => void;
+  onEdit: () => void;
 }) {
   const feedback = coach.name === "done" ? coach.feedback : null;
   const [speedCard, silenceCard, faceCard] = reportCards(outcome, feedback);
@@ -607,8 +629,8 @@ function DeliveryReport({
         <button className={styles.primary} type="button" onClick={onAgain}>
           다시 리허설
         </button>
-        <button className={styles.secondary} type="button" onClick={onRestart}>
-          처음으로
+        <button className={styles.secondary} type="button" onClick={onEdit}>
+          대본 고치기
         </button>
       </div>
     </div>
