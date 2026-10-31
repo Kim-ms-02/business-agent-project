@@ -28,7 +28,7 @@ const REVIEW: CheckedReview = {
   ],
 };
 
-const PREPARED = { review: REVIEW, notices: [], estimatedSeconds: 60 };
+const PREPARED = { review: REVIEW, notices: [], estimatedSeconds: 60, script: "" };
 const ANSWERS = ["저울로 쟀어요.", "방학 전 2주만 비교했어요.", ""];
 
 function render(session: PracticeSession): string {
@@ -52,9 +52,11 @@ describe("question practice page", () => {
     expect(html.match(/<h1/g)).toHaveLength(1);
   });
 
-  it("keeps the input form and its two buttons", () => {
+  // Since v1.1 step 5, 리허설 하기 is a link to the rehearsal page (tests/rehearsalPage.test.ts).
+  it("keeps the input form and its two actions", () => {
     const html = render({ phase: { name: "input", error: null }, prepared: null, answers: [] });
-    expect(buttons(html)).toEqual(["질문 받기", "리허설 하기"]);
+    expect(buttons(html)).toEqual(["질문 받기"]);
+    expect(html).toMatch(/<a[^>]*href="\/rehearsal"[^>]*>리허설 하기<\/a>/);
   });
 });
 
