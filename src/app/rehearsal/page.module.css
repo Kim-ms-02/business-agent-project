@@ -1,0 +1,334 @@
+/* Rehearsal page (v1.1). Shared pieces (cards, buttons, fields, notes) come from the question
+   practice styles; this file has what only the rehearsal uses. */
+
+/* Before and during the rehearsal */
+.rehearsalStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.rehearsalStatus > span:first-child {
+  font-family: var(--mono);
+  font-size: 1.25rem;
+}
+
+.speaking {
+  color: var(--spot-ink);
+  font-weight: 700;
+}
+
+/* The script on the music stand: large, calm, easy to find your place in. */
+.scriptView {
+  white-space: pre-wrap;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-mark);
+  background: var(--paper);
+  font-size: 1.125rem;
+  line-height: 1.9;
+}
+
+.cameraBox {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.cameraPreview {
+  width: 160px;
+  border-radius: var(--radius-mark);
+  transform: scaleX(-1);
+}
+
+.cameraSmall {
+  width: 120px;
+}
+
+.cameraControls {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.checkRow input {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.3em;
+  flex-shrink: 0;
+  accent-color: var(--spot-ink);
+}
+
+.warningText {
+  color: var(--warning-text);
+  font-weight: 600;
+}
+
+/* Result: what to fix first next to the four numbers, then the three areas. */
+.reportTop {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.focus {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 24px;
+  border-left: 4px solid var(--spot);
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  background: var(--spot-wash);
+}
+
+.focus h2 {
+  font-size: 1.375rem;
+}
+
+.focus .quote {
+  background: var(--sheet);
+}
+
+.goal {
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.goal strong {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--spot-ink);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--sheet);
+}
+
+.summary div {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+}
+
+.summary dd {
+  font-family: var(--mono);
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Words in place of a number (카메라 꺼짐, 측정이 부족해요) are smaller than the numbers. */
+.summary dd.word {
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.summary dt {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+
+.area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--sheet);
+}
+
+.area h2 {
+  font-family: var(--body);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.why {
+  margin-bottom: 10px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+}
+
+.metricHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.metricHead b {
+  font-family: var(--mono);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.metric .reason {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.tip strong {
+  color: var(--spot-ink);
+  font-weight: 600;
+}
+
+.tip strong::after {
+  content: " · ";
+}
+
+/* Beats the report's larger h3 style. */
+.area .subhead {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.plainList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 18px;
+  font-size: 0.8125rem;
+}
+
+.small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.practiceNotice {
+  padding: 8px 12px;
+  border-left: 3px solid var(--warning);
+  border-radius: 0 var(--radius-mark) var(--radius-mark) 0;
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* v0.4: sentence marks. Color helps, but every mark also says what it is in words. */
+.basis {
+  margin-left: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sentenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 28px;
+}
+
+.sentenceList li {
+  padding: 4px 10px;
+  overflow-wrap: anywhere;
+}
+
+.sentenceList li::marker {
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+.markedSentence {
+  border-radius: var(--radius-mark);
+  background: var(--paper);
+}
+
+.markRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.mark {
+  padding: 1px 8px;
+  border: 1px solid;
+  border-radius: var(--radius-pill);
+  background: var(--sheet);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.markPause {
+  border-color: var(--spot);
+  color: var(--spot-ink);
+}
+
+.markGaze {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.markFast {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.markMissing {
+  border-style: dashed;
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
+@media (max-width: 899px) {
+  .reportTop,
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}

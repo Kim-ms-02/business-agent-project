@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { MIN_SPOKEN_SECONDS, SILENCE_SECONDS } from "@/lib/deliveryConfig";
 import {
   DESIGN_VALUE_NOTICE,
   SPEED_LIMIT_NOTICE,
-  deliveryItems,
   deliverySummary,
   formatTime,
   silenceLabel,
@@ -14,15 +13,12 @@ import { BASELINE_SECONDS } from "@/lib/faceConfig";
 import {
   FACE_DESIGN_NOTICE,
   FACE_PRACTICE_NOTICE,
-  NO_CAMERA_NOTE,
-  faceItems,
   faceSummary,
   lowGazeLabel,
   measureBaseline,
   notEnoughFaceDetail,
   undetectedLabel,
   type FaceBaseline,
-  type FaceResult,
 } from "@/lib/faceScore";
 import { BASELINE_PROMPT, CAMERA_NOTICE, startFaceTracker, type FaceTracker } from "@/lib/faceTracker";
 import {
@@ -41,17 +37,19 @@ import {
   type RehearsalInput,
   type RehearsalOutcome,
 } from "@/lib/rehearsalResult";
+import { reportCards, reportTop, summaryTiles, type ReportCard } from "@/lib/rehearsalReport";
 import { DICTATION_GAP_SECONDS } from "@/lib/sectionConfig";
 import { markLabel } from "@/lib/sentenceMarks";
 import { canDictate, startListening } from "@/lib/speech";
-import type { DeliveryFeedbackResult, DeliverySummary, FirstFix, SentenceMark } from "@/lib/types";
+import type { DeliveryFeedbackResult, DeliverySummary, SentenceMark } from "@/lib/types";
 import { inputError, shouldAutoRetry, UNVERIFIED_NUMBER_NOTE } from "@/lib/validate";
 import { startVoiceTracker, type VoiceTracker } from "@/lib/voiceTracker";
 import styles from "../practice/page.module.css";
+import own from "./page.module.css";
 import DraftFields, { limitSecondsOf } from "../DraftFields";
 import { useDraft } from "../DraftProvider";
 import { useRehearsal, type CoachState } from "../RehearsalProvider";
-import { Detail, Quote, SERVER_UNREACHABLE } from "../ReportParts";
+import { Quote, SERVER_UNREACHABLE } from "../ReportParts";
 
 // The rehearsal page (v1.1, moved here from question practice): the speaker reads the script
 // aloud, and the result shows delivery scores, face scores when the camera was on, and sentence marks.
@@ -406,11 +404,11 @@ function Rehearsal({ onFinished }: { onFinished: (outcome: RehearsalOutcome) => 
       )}
       <section className={styles.card}>
         {running || step.name === "stopping" ? (
-          <p className={styles.rehearsalStatus} aria-live="polite">
+          <p className={own.rehearsalStatus} aria-live="polite">
             <span>
               {formatTime(elapsed)} / 제한 {formatTime(limitSeconds)}
             </span>
-            <span className={speaking ? styles.speaking : styles.muted}>{speaking ? "말하는 중" : "조용함"}</span>
+            <span className={speaking ? own.speaking : styles.muted}>{speaking ? "말하는 중" : "조용함"}</span>
             {dictationOn && <span className={styles.muted}>받아쓰기 켜짐</span>}
           </p>
         ) : (
@@ -424,25 +422,25 @@ function Rehearsal({ onFinished }: { onFinished: (outcome: RehearsalOutcome) => 
           </p>
         )}
         {dictationError && (
-          <p className={styles.warningText} role="alert">
+          <p className={own.warningText} role="alert">
             받아쓰기가 멈췄어요: {dictationError}
           </p>
         )}
 
-        <div className={styles.cameraBox}>
+        <div className={own.cameraBox}>
           <video
             ref={video}
-            className={running ? `${styles.cameraPreview} ${styles.cameraSmall}` : styles.cameraPreview}
+            className={running ? `${own.cameraPreview} ${own.cameraSmall}` : own.cameraPreview}
             muted
             playsInline
             hidden={!cameraOn}
           />
           {running ? (
-            camera.name === "ready" && !faceSeen && <p className={styles.warningText}>얼굴이 안 보여요</p>
+            camera.name === "ready" && !faceSeen && <p className={own.warningText}>얼굴이 안 보여요</p>
           ) : (
-            <div className={styles.cameraControls}>
+            <div className={own.cameraControls}>
               <p className={styles.muted}>카메라 (선택): {CAMERA_NOTICE}</p>
-              {camera.name === "measuring" && <p className={styles.speaking}>{BASELINE_PROMPT}</p>}
+              {camera.name === "measuring" && <p className={own.speaking}>{BASELINE_PROMPT}</p>}
               {camera.name === "ready" && <p className={styles.muted}>기준 자세를 쟀어요. 이제 리허설을 시작해 주세요.</p>}
               {(camera.name === "failed" || camera.name === "baselineFailed") && (
                 <p className={styles.alert} role="alert">
@@ -472,7 +470,7 @@ function Rehearsal({ onFinished }: { onFinished: (outcome: RehearsalOutcome) => 
         </div>
 
         {dictationAvailable && !running && step.name !== "stopping" && (
-          <label className={styles.checkRow}>
+          <label className={own.checkRow}>
             <input
               type="checkbox"
               checked={dictationOn}
@@ -484,7 +482,7 @@ function Rehearsal({ onFinished }: { onFinished: (outcome: RehearsalOutcome) => 
         )}
 
         {/* Before starting, the script is in the input box above; while speaking, it is shown to read from. */}
-        {!editable && <div className={styles.scriptView}>{script}</div>}
+        {!editable && <div className={own.scriptView}>{script}</div>}
 
         <div className={styles.actions}>
           {running || step.name === "stopping" ? (
@@ -521,52 +519,74 @@ function DeliveryReport({
   onAgain: () => void;
   onRestart: () => void;
 }) {
-  const { delivery: result, face } = outcome;
+  const feedback = coach.name === "done" ? coach.feedback : null;
+  const [speedCard, silenceCard, faceCard] = reportCards(outcome, feedback);
+  const { delivery, face } = outcome;
   return (
     <div className={styles.report}>
-      {/* The coach's first thing to fix comes before the scores, so the next step is seen first. */}
-      {coach.name !== "none" && <CoachFeedback coach={coach} onRetry={onRetryCoach} />}
+      {/* What to fix first comes before the scores, so the next step is seen first. */}
+      <div className={own.reportTop}>
+        <CoachTop coach={coach} onRetry={onRetryCoach} />
+        <dl className={own.summary} aria-label="요약">
+          {summaryTiles(outcome).map((tile) => (
+            <div key={tile.label}>
+              <dt>
+                {tile.label}
+                {tile.note && ` · ${tile.note}`}
+              </dt>
+              <dd className={/^\d+%?$/.test(tile.value) ? undefined : own.word}>{tile.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
 
-      <section className={styles.card}>
-        <h2>말투 점수</h2>
-        {result.measured ? (
-          <>
-            <p className={styles.total}>
-              {result.total}점 <span className={styles.muted}>/ 100</span>
-              {result.totalNote && <span className={styles.tag}> {result.totalNote}</span>}
-            </p>
-            <dl className={styles.details}>
-              {deliveryItems(result).map((item) => (
-                <Detail key={item.label} label={item.label}>
-                  <strong>{item.score}</strong> · {item.reason}
-                </Detail>
-              ))}
-            </dl>
-            <h3>{SILENCE_SECONDS}초 넘게 멈춘 곳</h3>
-            {result.silences.length === 0 ? (
-              <p className={styles.muted}>없어요.</p>
-            ) : (
-              <ul className={styles.itemList}>
-                {result.silences.map((silence) => (
-                  <li key={silence.start}>{silenceLabel(silence)}</li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : (
-          <>
-            <p className={styles.alert}>{result.message}</p>
-            <p className={styles.muted}>
-              말한 시간이 {Math.round(result.spokenSeconds)}초예요. {MIN_SPOKEN_SECONDS}초 이상 말해야 점수를 낼 수
+      <div className={own.cards}>
+        <AreaCard card={speedCard}>
+          {!delivery.measured && (
+            <p className={own.small}>
+              말한 시간이 {Math.round(delivery.spokenSeconds)}초예요. {MIN_SPOKEN_SECONDS}초 이상 말해야 점수를 낼 수
               있어요.
             </p>
-          </>
-        )}
-      </section>
+          )}
+        </AreaCard>
+        <AreaCard card={silenceCard}>
+          {delivery.measured && (
+            <>
+              <h3 className={own.subhead}>{SILENCE_SECONDS}초 넘게 멈춘 때</h3>
+              {delivery.silences.length === 0 ? (
+                <p className={own.small}>없어요.</p>
+              ) : (
+                <ul className={own.plainList}>
+                  {delivery.silences.map((silence) => (
+                    <li key={silence.start}>{silenceLabel(silence)}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </AreaCard>
+        <AreaCard card={faceCard} notice={face ? FACE_PRACTICE_NOTICE : null} quiet={face === null}>
+          {face?.measured && (
+            <>
+              <h3 className={own.subhead}>시선이 낮았던 구간</h3>
+              {face.lowGazeWindows.length === 0 ? (
+                <p className={own.small}>없어요.</p>
+              ) : (
+                <ul className={own.plainList}>
+                  {face.lowGazeWindows.map((window) => (
+                    <li key={window.start}>{lowGazeLabel(window)}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+          {face && !face.measured && <p className={own.small}>{notEnoughFaceDetail(face.measuredRatio)}</p>}
+          {face && <p className={own.small}>{undetectedLabel(face.undetectedSeconds)}</p>}
+          {face && <p className={own.small}>{FACE_DESIGN_NOTICE}</p>}
+        </AreaCard>
+      </div>
 
       <SentenceReport outcome={outcome} />
-
-      {face ? <FaceReport face={face} /> : <p className={styles.muted}>{NO_CAMERA_NOTE}</p>}
 
       <p className={styles.muted}>{DESIGN_VALUE_NOTICE}</p>
       {/* With dictation the speed comes from what was said, so the read-as-written caveat does not apply. */}
@@ -583,117 +603,108 @@ function DeliveryReport({
   );
 }
 
-function CoachFeedback({ coach, onRetry }: { coach: Exclude<CoachState, { name: "none" }>; onRetry: () => void }) {
-  return (
-    <section className={styles.card} aria-live="polite">
-      <h2>코치 피드백</h2>
-      {coach.name === "loading" && (
-        <p className={styles.muted}>{coach.retrying ? "한 번 더 받아 오는 중이에요" : "피드백 준비 중이에요"}</p>
-      )}
-      {coach.name === "failed" && (
-        <>
-          <p className={styles.alert} role="alert">
-            {coach.message}
-          </p>
-          <div className={styles.actions}>
-            <button className={styles.secondary} type="button" onClick={onRetry}>
-              다시 시도
-            </button>
-          </div>
-        </>
-      )}
-      {coach.name === "done" && (
-        <>
-          {coach.notices.map((notice) => (
-            <p key={notice} className={styles.muted}>
-              {notice}
+/** The top left of the result: the first thing to fix, the coach's overall comment, or the coach's state. */
+function CoachTop({ coach, onRetry }: { coach: CoachState; onRetry: () => void }) {
+  if (coach.name === "none") return <div />;
+  if (coach.name !== "done") {
+    return (
+      <section className={own.focus} aria-live="polite">
+        <h2>코치 피드백</h2>
+        {coach.name === "loading" ? (
+          <p className={styles.muted}>{coach.retrying ? "한 번 더 받아 오는 중이에요" : "피드백 준비 중이에요"}</p>
+        ) : (
+          <>
+            <p className={styles.alert} role="alert">
+              {coach.message}
             </p>
-          ))}
-          {coach.feedback.firstFix && <FirstFixView fix={coach.feedback.firstFix} />}
-          {coach.feedback.summary && <p>{coach.feedback.summary}</p>}
-          {coach.feedback.summaryUnverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
-          <ol className={styles.itemList}>
-            {coach.feedback.items.map((item) => (
-              <li key={item.item}>
-                <p className={styles.tag}>{item.item}</p>
-                {item.unverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
-                <p>{item.explain}</p>
-                {item.tryThis && (
-                  <p className={styles.tryThis}>
-                    <strong>다음에 해 볼 것</strong> {item.tryThis}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ol>
-          <p className={styles.muted}>코치는 점수를 바꾸지 않고, 앱이 잰 숫자만 보고 풀어 줘요.</p>
-        </>
-      )}
-    </section>
-  );
-}
+            <div className={styles.actions}>
+              <button className={styles.secondary} type="button" onClick={onRetry}>
+                다시 시도
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    );
+  }
 
-function FaceReport({ face }: { face: FaceResult }) {
+  const { feedback, notices } = coach;
+  const top = reportTop(feedback);
   return (
-    <section className={styles.card}>
-      <h2>얼굴 행동 점수</h2>
-      <p className={styles.practiceNotice}>{FACE_PRACTICE_NOTICE}</p>
-      {face.measured ? (
+    <section className={own.focus} aria-live="polite">
+      <h2>{top.kind === "firstFix" ? "가장 먼저 고칠 한 가지" : "코치 총평"}</h2>
+      {notices.map((notice) => (
+        <p key={notice} className={styles.muted}>
+          {notice}
+        </p>
+      ))}
+      {top.kind === "firstFix" && (
         <>
-          <p className={styles.total}>
-            {face.total}점 <span className={styles.muted}>/ 100</span>
+          {top.fix.quote && <Quote text={top.fix.quote} found={top.fix.quoteFound} />}
+          {top.fix.unverified && <p className={own.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
+          <p>{top.fix.explain}</p>
+          <p className={own.goal}>
+            <strong>다음 리허설 목표</strong> {top.fix.goal}
           </p>
-          <dl className={styles.details}>
-            {faceItems(face).map((item) => (
-              <Detail key={item.label} label={item.label}>
-                <strong>{item.score}</strong> · {item.reason}
-              </Detail>
-            ))}
-          </dl>
-          <h3>시선이 낮았던 구간</h3>
-          {face.lowGazeWindows.length === 0 ? (
-            <p className={styles.muted}>없어요.</p>
-          ) : (
-            <ul className={styles.itemList}>
-              {face.lowGazeWindows.map((window) => (
-                <li key={window.start}>{lowGazeLabel(window)}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      ) : (
-        <>
-          <p className={styles.alert}>{face.message}</p>
-          <p className={styles.muted}>{notEnoughFaceDetail(face.measuredRatio)}</p>
         </>
       )}
-      <p className={styles.muted}>{undetectedLabel(face.undetectedSeconds)}</p>
-      <p className={styles.muted}>{FACE_DESIGN_NOTICE}</p>
+      {top.kind !== "none" && top.summary && <p className={top.kind === "firstFix" ? own.small : undefined}>{top.summary}</p>}
+      {feedback.summaryUnverified && <p className={own.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
+      <p className={own.small}>코치는 점수를 바꾸지 않고, 앱이 잰 숫자만 보고 풀어 줘요.</p>
     </section>
   );
 }
 
-function FirstFixView({ fix }: { fix: FirstFix }) {
+/** One area of the result: its items with score, reason, and the coach's words, then extra details. */
+function AreaCard({
+  card,
+  notice = null,
+  quiet = false,
+  children,
+}: {
+  card: ReportCard;
+  notice?: string | null;
+  /** The card is empty by choice (camera off), so its message is a plain note, not a warning. */
+  quiet?: boolean;
+  children?: ReactNode;
+}) {
+  // The face card's reason line is the practice-only notice; it is shown as a notice, not small print.
+  const why = card.why === notice ? null : card.why;
   return (
-    <div className={styles.firstFix}>
-      <h3>가장 먼저 고칠 한 가지</h3>
-      {fix.quote && <Quote text={fix.quote} found={fix.quoteFound} />}
-      {fix.unverified && <p className={styles.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
-      <p>{fix.explain}</p>
-      <p className={styles.tryThis}>
-        <strong>다음 리허설 목표</strong> {fix.goal}
-      </p>
-    </div>
+    <section className={own.area}>
+      <h2>{card.title}</h2>
+      {why && <p className={own.why}>{why}</p>}
+      {notice && <p className={own.practiceNotice}>{notice}</p>}
+      {card.message && <p className={quiet ? own.small : styles.alert}>{card.message}</p>}
+      {card.items.map((item) => (
+        <div key={item.label} className={own.metric}>
+          <p className={own.metricHead}>
+            <span>{item.label}</span>
+            <b>{item.score}</b>
+          </p>
+          <p className={own.reason}>{item.reason}</p>
+          {item.unverified && <p className={own.warningText}>{UNVERIFIED_NUMBER_NOTE}</p>}
+          {item.explain && <p>{item.explain}</p>}
+          {item.tryThis && (
+            <p className={own.tip}>
+              <strong>다음에 해 볼 것</strong>
+              {item.tryThis}
+            </p>
+          )}
+        </div>
+      ))}
+      {children}
+    </section>
   );
 }
 
 // Each mark has its own color, but the words always say what it is.
 const MARK_STYLE: Record<SentenceMark["kind"], string> = {
-  pause: styles.markPause,
-  lowGaze: styles.markGaze,
-  fast: styles.markFast,
-  skipped: styles.markMissing,
-  unread: styles.markMissing,
+  pause: own.markPause,
+  lowGaze: own.markGaze,
+  fast: own.markFast,
+  skipped: own.markMissing,
+  unread: own.markMissing,
 };
 
 function SentenceReport({ outcome }: { outcome: RehearsalOutcome }) {
@@ -707,17 +718,17 @@ function SentenceReport({ outcome }: { outcome: RehearsalOutcome }) {
       ) : (
         <>
           <p className={styles.muted}>
-            문장 위치 <span className={styles.basis}>{basisLabel(section.approximate)}</span>
+            문장 위치 <span className={own.basis}>{basisLabel(section.approximate)}</span>
           </p>
-          <ol className={styles.sentenceList}>
+          <ol className={own.sentenceList}>
             {sentences.map((sentence, i) => {
               const marks = section.marks?.[i] ?? [];
               return (
-                <li key={i} className={marks.length > 0 ? styles.markedSentence : undefined}>
+                <li key={i} className={marks.length > 0 ? own.markedSentence : undefined}>
                   {marks.length > 0 && (
-                    <span className={styles.markRow}>
+                    <span className={own.markRow}>
                       {marks.map((mark) => (
-                        <span key={mark.kind} className={`${styles.mark} ${MARK_STYLE[mark.kind]}`}>
+                        <span key={mark.kind} className={`${own.mark} ${MARK_STYLE[mark.kind]}`}>
                           {markLabel(mark)}
                         </span>
                       ))}
