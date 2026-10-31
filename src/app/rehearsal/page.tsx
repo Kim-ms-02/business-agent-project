@@ -37,7 +37,14 @@ import {
   type RehearsalInput,
   type RehearsalOutcome,
 } from "@/lib/rehearsalResult";
-import { reportCards, reportTop, summaryTiles, type ReportCard } from "@/lib/rehearsalReport";
+import {
+  paceChart,
+  reportCards,
+  reportTop,
+  summaryTiles,
+  type PaceChart as PaceChartData,
+  type ReportCard,
+} from "@/lib/rehearsalReport";
 import { DICTATION_GAP_SECONDS } from "@/lib/sectionConfig";
 import { markLabel } from "@/lib/sentenceMarks";
 import { canDictate, startListening } from "@/lib/speech";
@@ -542,6 +549,11 @@ function DeliveryReport({
 
       <div className={own.cards}>
         <AreaCard card={speedCard}>
+          {outcome.section.quarters ? (
+            <PaceChartView chart={paceChart(outcome.section.quarters)} />
+          ) : (
+            outcome.section.marks !== null && <p className={own.small}>{NO_DICTATION_PACE_NOTE}</p>
+          )}
           {!delivery.measured && (
             <p className={own.small}>
               말한 시간이 {Math.round(delivery.spokenSeconds)}초예요. {MIN_SPOKEN_SECONDS}초 이상 말해야 점수를 낼 수
@@ -698,6 +710,40 @@ function AreaCard({
   );
 }
 
+/** Quarter speeds with the recommended band; every number is also written out below the chart. */
+function PaceChartView({ chart }: { chart: PaceChartData }) {
+  const { band, points } = chart;
+  // The line breaks where a quarter was not spoken.
+  const line = points
+    .map((p, i) => (p.y === null ? "" : `${i > 0 && points[i - 1].y !== null ? "L" : "M"}${p.x},${p.y}`))
+    .join(" ");
+  return (
+    <figure className={own.pace}>
+      <h3 className={own.subhead}>구간별 말 속도</h3>
+      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} role="img" aria-label={chart.description}>
+        <rect x={0} y={band.top} width={chart.width} height={band.bottom - band.top} className={own.paceBand} />
+        <path d={line} className={own.paceLine} />
+        {points.map((p) =>
+          p.y === null ? null : (
+            <circle key={p.x} cx={p.x} cy={p.y} r={p.outside ? 5 : 4} className={p.outside ? own.paceOut : own.paceDot} />
+          ),
+        )}
+      </svg>
+      <p className={own.small}>
+        띠는 권장 범위(분당 {band.low}~{band.high}음절)예요.
+      </p>
+      <ol className={own.paceLabels}>
+        {points.map((p) => (
+          <li key={p.x} className={p.outside ? own.paceOutLabel : undefined}>
+            {p.label}
+            <small>{p.sentences}</small>
+          </li>
+        ))}
+      </ol>
+    </figure>
+  );
+}
+
 // Each mark has its own color, but the words always say what it is.
 const MARK_STYLE: Record<SentenceMark["kind"], string> = {
   pause: own.markPause,
@@ -740,21 +786,6 @@ function SentenceReport({ outcome }: { outcome: RehearsalOutcome }) {
             })}
           </ol>
         </>
-      )}
-      {section.quarters ? (
-        <>
-          <h3>구간별 말 속도</h3>
-          <ul className={styles.itemList}>
-            {section.quarters.map((quarter, i) => (
-              <li key={quarter.first}>
-                {i + 1}구간 ({quarter.first + 1}~{quarter.last + 1}번 문장):{" "}
-                {quarter.pace === null ? "말하지 않음" : `분당 ${quarter.pace}음절`}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        section.marks !== null && <p className={styles.muted}>{NO_DICTATION_PACE_NOTE}</p>
       )}
       {section.fillers && (
         <p>

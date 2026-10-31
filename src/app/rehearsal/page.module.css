@@ -241,6 +241,56 @@
   font-size: 0.8125rem;
 }
 
+/* Quarter speeds: a band for the recommended range, a line through the quarters. */
+.pace svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 6px 0 4px;
+}
+
+.paceBand {
+  fill: var(--good-wash);
+}
+
+.paceLine {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+.paceDot {
+  fill: var(--ink);
+}
+
+.paceOut {
+  fill: var(--spot);
+  stroke: var(--spot-ink);
+  stroke-width: 1.5;
+}
+
+.paceLabels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5em, 1fr));
+  gap: 6px 10px;
+  margin-top: 6px;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.paceLabels small {
+  display: block;
+  font-family: var(--body);
+  color: var(--muted);
+}
+
+/* Outside the band: said in words (빠름/느림), and bold so it is found first. */
+.paceOutLabel {
+  color: var(--spot-ink);
+  font-weight: 600;
+}
+
 .small {
   font-size: 0.8125rem;
   color: var(--muted);

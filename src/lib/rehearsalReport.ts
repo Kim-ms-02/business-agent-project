@@ -2,6 +2,7 @@ import { SILENCE_SECONDS, SPEED_BANDS } from "./deliveryConfig";
 import { deliveryItems } from "./deliveryScore";
 import { FACE_PRACTICE_NOTICE, NO_CAMERA_NOTE, faceItems } from "./faceScore";
 import type { RehearsalOutcome } from "./rehearsalResult";
+import type { QuarterPace } from "./sentenceMarks";
 import type { DeliveryFeedback, FirstFix, RehearsalItem } from "./types";
 
 // Where each part of a rehearsal result goes on the result screen (v1.1). Scores and reasons come
@@ -108,4 +109,67 @@ export function reportTop(feedback: DeliveryFeedback | null): ReportTop {
   const summary = feedback.summary || null;
   if (feedback.firstFix) return { kind: "firstFix", fix: feedback.firstFix, summary };
   return summary ? { kind: "summary", summary } : { kind: "none" };
+}
+
+/** One quarter of the script on the speed chart. */
+export interface PacePoint {
+  x: number;
+  /** Null when the quarter was not spoken: no point is drawn. */
+  y: number | null;
+  pace: number | null;
+  outside: "빠름" | "느림" | null;
+  label: string;
+  sentences: string;
+}
+
+export interface PaceChart {
+  width: number;
+  height: number;
+  points: PacePoint[];
+  /** The 4-point speed range; edges count as inside, like the score bands. */
+  band: { low: number; high: number; top: number; bottom: number };
+  y: (pace: number) => number;
+  description: string;
+}
+
+const CHART_WIDTH = 300;
+const CHART_HEIGHT = 96;
+const CHART_PADDING = 8;
+// Room above and below the band, so a quarter just outside it still looks outside.
+const CHART_MARGIN = 60;
+
+/** The quarter speeds (dictation on only) as chart points, with the recommended band. */
+export function paceChart(quarters: QuarterPace[]): PaceChart {
+  const paces = quarters.map((q) => q.pace).filter((pace): pace is number => pace !== null);
+  // Every quarter stays on the chart, however fast or slow.
+  const min = Math.min(SPEED_LOW - CHART_MARGIN, ...paces);
+  const max = Math.max(SPEED_HIGH + CHART_MARGIN, ...paces);
+  const y = (pace: number) => CHART_PADDING + ((max - pace) / (max - min)) * (CHART_HEIGHT - 2 * CHART_PADDING);
+
+  const points = quarters.map((quarter, i): PacePoint => {
+    const { pace } = quarter;
+    const outside = pace === null ? null : pace > SPEED_HIGH ? "빠름" : pace < SPEED_LOW ? "느림" : null;
+    const name = `${i + 1}구간`;
+    return {
+      x: ((i + 0.5) * CHART_WIDTH) / quarters.length,
+      y: pace === null ? null : y(pace),
+      pace,
+      outside,
+      label: pace === null ? `${name} 말하지 않음` : `${name} ${pace}${outside ? ` · ${outside}` : ""}`,
+      sentences:
+        quarter.first === quarter.last ? `${quarter.first + 1}번 문장` : `${quarter.first + 1}~${quarter.last + 1}번 문장`,
+    };
+  });
+
+  const spoken = points.map((p, i) =>
+    p.pace === null ? `${i + 1}구간 말하지 않음` : `${i + 1}구간 ${p.pace}${p.outside ? ` ${p.outside}` : ""}`,
+  );
+  return {
+    width: CHART_WIDTH,
+    height: CHART_HEIGHT,
+    points,
+    band: { low: SPEED_LOW, high: SPEED_HIGH, top: y(SPEED_HIGH), bottom: y(SPEED_LOW) },
+    y,
+    description: `구간별 분당 음절: ${spoken.join(", ")}. 권장 범위 ${SPEED_LOW}~${SPEED_HIGH}`,
+  };
 }
