@@ -83,7 +83,7 @@ export default function Home() {
           <div className={styles.card}>
             <p className={styles.cardLabel}>수업</p>
             <h3>조별 과제 발표</h3>
-            <p>근거 없는 주장, 출처 없는 숫자를 질문으로 미리 짚어요.</p>
+            <p>근거 없는 주장, 출처 없는 숫자를 질문으로 미리 받아 볼 수 있어요.</p>
           </div>
           <div className={styles.card}>
             <p className={styles.cardLabel}>프로젝트</p>
