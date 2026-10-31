@@ -6,6 +6,7 @@ import DevTools from "./DevTools";
 import DraftProvider from "./DraftProvider";
 import "./globals.css";
 import PracticeProvider from "./PracticeProvider";
+import RehearsalProvider from "./RehearsalProvider";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 
@@ -32,12 +33,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <DraftProvider>
           <PracticeProvider>
-            <SiteHeader />
-            <div id="content" tabIndex={-1}>
-              {children}
-            </div>
-            <SiteFooter />
-            {process.env.NODE_ENV === "development" && <DevTools />}
+            <RehearsalProvider>
+              <SiteHeader />
+              <div id="content" tabIndex={-1}>
+                {children}
+              </div>
+              <SiteFooter />
+              {process.env.NODE_ENV === "development" && <DevTools />}
+            </RehearsalProvider>
           </PracticeProvider>
         </DraftProvider>
       </body>

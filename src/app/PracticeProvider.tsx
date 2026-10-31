@@ -9,7 +9,6 @@ import type { AnswerEvaluation, CheckedReview } from "@/lib/types";
 
 export type Phase =
   | { name: "input"; error: string | null }
-  | { name: "rehearsal" }
   | { name: "preparing"; retrying: boolean }
   | { name: "failed"; message: string }
   | { name: "practice"; index: number }
@@ -22,6 +21,8 @@ export interface Prepared {
   review: CheckedReview;
   notices: string[];
   estimatedSeconds: number;
+  /** The script the questions were made from; the shared script box may change afterwards. */
+  script: string;
 }
 
 export interface PracticeSession {

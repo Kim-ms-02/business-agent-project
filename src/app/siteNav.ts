@@ -10,7 +10,7 @@ export interface SitePage {
 export const SITE_PAGES: SitePage[] = [
   { href: "/", label: "소개", ready: true },
   { href: "/practice", label: "질문 연습", ready: true },
-  { href: "/rehearsal", label: "리허설", ready: false },
+  { href: "/rehearsal", label: "리허설", ready: true },
   { href: "/faq", label: "자주 묻는 질문", ready: false },
 ];
 

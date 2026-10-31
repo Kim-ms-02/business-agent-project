@@ -151,6 +151,15 @@
   color: var(--danger);
 }
 
+/* Information, not an error: the script changed after the questions were made. */
+.notice {
+  padding: 12px 14px;
+  border-left: 4px solid var(--spot);
+  border-radius: 0 var(--radius-button) var(--radius-button) 0;
+  background: var(--spot-wash);
+  color: var(--ink);
+}
+
 .status {
   padding: var(--space-xl) 24px;
   border: 1px solid var(--line);
