@@ -41,6 +41,35 @@ describe("intro page wording", () => {
     expect(text).not.toContain("숫자를 질문으로 미리 짚어요");
   });
 
+  // v0.3 video check passed only in part (looking down still counted as looking at the screen),
+  // so gaze is offered as a reference only.
+  it("offers low-gaze sentences as a reference only", () => {
+    expect(text.match(/카메라를 켜면 시선이 낮았던 문장도 참고로 알려 줘요/g)).toHaveLength(2);
+    expect(text).toContain("화면을 본 시간, 시선이 낮았던 문장 (참고용)");
+    expect(text).not.toMatch(/시선이 낮았던 문장도 짚어/);
+  });
+
+  // Without dictation the sentence is estimated from time, and v0.4 check is not done yet.
+  it("says pauses are placed at about which sentence", () => {
+    expect(text).toContain("어느 문장쯤에서 멈췄는지");
+    expect(text).toContain("3초 넘게 멈춘 곳과 대략의 문장");
+    expect(text).not.toContain("어느 문장에서 멈췄는지");
+  });
+
+  // The code checks again; it cannot promise Claude never writes such things.
+  it("says the code checks again instead of promising none", () => {
+    expect(text).toContain('“긴장해 보여요” 같은 판단은 쓰지 않도록 코드가 한 번 더 검사해요.');
+  });
+
+  it("offers the graduation card as questions to receive", () => {
+    expect(text).toContain("결론이 근거보다 넓어진 곳을 질문으로 받아 볼 수 있어요.");
+    expect(text).not.toContain("범위를 좁혀요");
+  });
+
+  it("keeps the weak-spot question wording", () => {
+    expect(text).toContain("대본의 약한 곳을 겨냥한 질문");
+  });
+
   it.each([
     ["the one-minute claim", "1분이면"],
     ["three rounds of practice", "세 번 연습"],
