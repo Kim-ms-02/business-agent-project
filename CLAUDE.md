@@ -33,9 +33,11 @@
   - src/lib/speech.ts: 브라우저 읽어주기와 받아쓰기
   - src/app/practice/page.tsx: 질문 연습 화면 흐름 (v1.1 2단계에서 src/app/page.tsx에서 옮김)
   - src/app/rehearsal/page.tsx: 리허설 화면 흐름 (v1.1 5단계에서 질문 연습 화면에서 옮김)
+  - src/app/page.tsx: 소개, src/app/faq/page.tsx: 자주 묻는 질문 (v1.1)
   - 사이트 틀은 src/app/layout.tsx. 페이지를 옮겨도 남는 값은 src/app/DraftProvider.tsx(대본·주제·듣는 사람·제한 시간), src/app/PracticeProvider.tsx(질문·답·평가 결과), src/app/RehearsalProvider.tsx(마지막 리허설 결과와 코치 피드백). 두 페이지 맨 위의 대본 입력 칸은 src/app/DraftFields.tsx
+  - src/lib/rehearsalReport.ts: 리허설 결과 화면 배치(요약 숫자 4개, 영역별 카드 3개, 구간별 말 속도 그래프) (순수 함수, 점수는 새로 계산하지 않음)
   - tests/validate.test.ts: 검증 함수 테스트
-- 보조: src/lib/types.ts(공통 타입), src/lib/skill.ts(스킬 파일 읽기), src/app/api/review·answer(서버 경로), tests/fixtures/sample-script.txt(약점을 일부러 넣은 확인용 대본)
+- 보조: src/lib/types.ts(공통 타입), src/lib/skill.ts(스킬 파일 읽기), src/app/api/review·answer(서버 경로), tests/fixtures/sample-script.txt(약점을 일부러 넣은 확인용 대본), src/app/ReportParts.tsx(두 페이지가 함께 쓰는 인용 칸·항목 줄), src/app/siteNav.ts(메뉴 페이지 목록)
 - 앞으로 추가할 곳: 말투 관련은 아래 세 파일로 나눈다.
   - src/lib/deliveryConfig.ts: 말투 점수 기준선과 각 값의 이유
   - src/lib/deliveryScore.ts: 말한 구간 기록 + 대본 음절 수 → 말 속도·침묵·크기·제한 시간 계산 (순수 함수)
