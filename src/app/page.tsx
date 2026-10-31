@@ -24,7 +24,7 @@ export default function Home() {
           </h1>
           <p className={styles.lede}>
             대본을 넣으면 심사위원처럼 질문 {QUESTION_COUNT}개를 소리로 물어봐요. 다 답하면 대본과 답변을 평가하고,
-            리허설에서는 어느 문장에서 멈췄는지, 카메라를 켜면 시선이 낮았던 문장도 짚어 줘요.
+            리허설에서는 어느 문장쯤에서 멈췄는지, 카메라를 켜면 시선이 낮았던 문장도 참고로 알려 줘요.
           </p>
           <div className={styles.ctas}>
             <Link className={styles.primary} href="/practice">
@@ -93,7 +93,7 @@ export default function Home() {
           <div className={styles.card}>
             <p className={styles.cardLabel}>졸업·연구</p>
             <h3>중간·최종 발표</h3>
-            <p>결론이 근거보다 넓어진 곳을 찾아 범위를 좁혀요.</p>
+            <p>결론이 근거보다 넓어진 곳을 질문으로 받아 볼 수 있어요.</p>
           </div>
         </div>
       </section>
@@ -120,7 +120,10 @@ export default function Home() {
           <li>
             <p className={styles.stepLabel}>03 · 리허설</p>
             <h3>문장마다 짚어 줘요</h3>
-            <p>멈춘 곳을 대본 위에 표시해요. 받아쓰기를 켜면 빨라진 문장, 카메라를 켜면 시선이 낮았던 문장도 짚어요.</p>
+            <p>
+              멈춘 곳을 대본 위에 표시해요. 받아쓰기를 켜면 빨라진 문장도 짚어요. 카메라를 켜면 시선이 낮았던 문장도
+              참고로 알려 줘요.
+            </p>
           </li>
         </ol>
       </section>
@@ -130,7 +133,7 @@ export default function Home() {
         <h2 id="intro-what">내용, 전달, 시선을 나눠서 봐요</h2>
         <p className={styles.intro}>
           숫자는 정해 둔 기준표로 코드가 재고, 코치는 그 숫자만 근거로 설명해요. 대본에 없는 숫자나 &ldquo;긴장해
-          보여요&rdquo; 같은 판단은 쓰지 않아요.
+          보여요&rdquo; 같은 판단은 쓰지 않도록 코드가 한 번 더 검사해요.
         </p>
         <div className={styles.cats}>
           <div className={styles.cat}>
@@ -151,7 +154,7 @@ export default function Home() {
               <li>
                 말 속도: 분당 {SPEED_LOW}~{SPEED_HIGH}음절 권장
               </li>
-              <li>3초 넘게 멈춘 곳과 그 문장</li>
+              <li>3초 넘게 멈춘 곳과 대략의 문장</li>
               <li>끝으로 갈수록 작아지는 목소리, 제한 시간</li>
             </ul>
           </div>
@@ -160,7 +163,7 @@ export default function Home() {
             <h3>시선과 자세</h3>
             <p className={styles.why}>화면을 덜 보면 청중과 멀어져요.</p>
             <ul>
-              <li>화면을 본 시간, 시선이 낮았던 문장</li>
+              <li>화면을 본 시간, 시선이 낮았던 문장 (참고용)</li>
               <li>평소보다 웃은 시간</li>
               <li>고개 움직임, 화면 안 자세</li>
             </ul>
